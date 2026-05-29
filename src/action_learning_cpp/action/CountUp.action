@@ -1,0 +1,10 @@
+# Goal - 目标计数值
+int64 target
+---
+# Result - 最终结果
+int64 final_count
+int64[] sequence
+---
+# Feedback - 当前进度
+int64 current_count
+float32 progress_percent

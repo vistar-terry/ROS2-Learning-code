@@ -1,0 +1,130 @@
+# diff_bot_controllers.yaml
+# ros2_control 控制器配置文件
+#
+# 知识点：
+# - controller_manager 负责加载和管理所有控制器
+# - 每个控制器需要指定类型和参数
+# - 控制器通过 command_interface 和 state_interface 与硬件交互
+# - 控制器之间通过话题通信
+
+# ============================================================
+# 控制器管理器配置
+# ============================================================
+controller_manager:
+  ros__parameters:
+
+    # 控制器更新频率（Hz）
+    # 所有控制器共享同一个更新循环
+    update_rate: 50
+
+    # ============================================================
+    # Joint State Broadcaster（关节状态广播器）
+    # 功能：读取所有关节的状态（位置、速度、力矩），发布到 /joint_states 话题
+    # 类型：joint_state_broadcaster/JointStateBroadcaster
+    # 这是 ros2_control 中最基本的控制器，几乎所有机器人都需要
+    # ============================================================
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    # ============================================================
+    # Diff Drive Controller（差速驱动控制器）
+    # 功能：接收 /cmd_vel 速度命令，计算两轮速度并执行
+    # 类型：diff_drive_controller/DiffDriveController
+    # 
+    # 原理：
+    #   输入：linear.x (m/s), angular.z (rad/s)
+    #   输出：left_wheel_joint/velocity, right_wheel_joint/velocity
+    #   
+    #   运动学逆解：
+    #     v_left  = linear.x - angular.z * wheel_separation / 2
+    #     v_right = linear.x + angular.z * wheel_separation / 2
+    #   
+    #   运动学正解（里程计）：
+    #     linear.x  = (v_right + v_left) / 2
+    #     angular.z = (v_right - v_left) / wheel_separation
+    # ============================================================
+    diff_bot_base_controller:
+      type: diff_drive_controller/DiffDriveController
+
+# ============================================================
+# 差速控制器参数
+# ============================================================
+diff_bot_base_controller:
+  ros__parameters:
+
+    # --- 轮子配置 ---
+    # 左轮关节名（必须与 URDF 中的 joint 名一致）
+    left_wheel_names: ["left_wheel_joint"]
+    # 右轮关节名
+    right_wheel_names: ["right_wheel_joint"]
+
+    # 轮距（两轮中心距离，米）
+    # 必须与 URDF 中的实际值一致
+    wheel_separation: 0.22
+
+    # 轮子半径（米）
+    # 用于将角速度转换为线速度
+    wheel_radius: 0.033
+
+    # 轮距和半径的乘数（调试用，通常为1.0）
+    wheel_separation_multiplier: 1.0
+    wheel_radius_multiplier: 1.0
+
+    # --- 里程计配置 ---
+    # 里程计发布频率（Hz）
+    publish_rate: 50.0
+
+    # 里程计坐标系
+    odom_frame_id: odom
+    # 机器人底盘坐标系
+    base_frame_id: base_footprint
+
+    # 里程计是否发布 TF 变换（odom → base_footprint）
+    # 如果设为 true，控制器会发布 TF
+    # 如果设为 false，需要其他节点发布（如 robot_localization）
+    enable_odom_tf: true
+
+    # 里程计协方差矩阵（6x6）
+    # [x, y, z, roll, pitch, yaw]
+    # 对角线元素，用于表示测量不确定性
+    pose_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+    twist_covariance_diagonal: [0.001, 0.001, 0.001, 0.001, 0.001, 0.01]
+
+    # --- 速度命令配置 ---
+    # 订阅的速度命令话题
+    # 默认是 /cmd_vel
+    cmd_vel_timeout: 0.5   # 命令超时（秒），超时后停止运动
+
+    # 是否发布速度命令执行状态
+    publish_cmd: true
+
+    # --- 运动限制 ---
+    # 线速度限制（m/s）
+    linear:
+      x:
+        has_velocity_limits: true
+        has_acceleration_limits: true
+        has_jerk_limits: false
+        max_velocity: 0.5
+        min_velocity: -0.5
+        max_acceleration: 1.0
+        min_acceleration: -1.0
+
+    # 角速度限制（rad/s）
+    angular:
+      z:
+        has_velocity_limits: true
+        has_acceleration_limits: true
+        has_jerk_limits: false
+        max_velocity: 1.0
+        min_velocity: -1.0
+        max_acceleration: 2.0
+        min_acceleration: -2.0
+
+    # --- 开环/闭环配置 ---
+    # true: 使用编码器反馈计算里程计（闭环）
+    # false: 使用命令速度计算里程计（开环）
+    open_loop: false
+
+    # 是否启用多圈旋转追踪
+    allow_multiple_cmd_vel_pub: true

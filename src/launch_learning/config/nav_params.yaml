@@ -1,0 +1,16 @@
+# nav_params.yaml
+# 多节点参数配置文件（模拟导航系统）
+
+# 仿真导航场景的参数配置
+
+param_talker:
+  ros__parameters:
+    topic_name: "cmd_vel"
+    publish_freq: 10.0
+    message_prefix: "[nav_sim]"
+
+worker_node:
+  ros__parameters:
+    max_count: 0       # 0 = 无限运行
+    work_interval: 0.1
+    exit_code: 0

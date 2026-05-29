@@ -1,0 +1,14 @@
+# 目标：导航到指定位置
+geometry_msgs/Pose2D target_pose
+float32 max_velocity  # 最大速度
+---
+# 结果：导航完成后的状态
+geometry_msgs/Pose2D final_pose
+uint32 execution_time  # 执行时间(秒)
+bool success
+string status_message
+---
+# 反馈：导航过程中的实时信息
+geometry_msgs/Pose2D current_pose
+float32 distance_to_goal  # 距离目标距离
+uint8 percent_complete    # 完成百分比

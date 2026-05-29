@@ -1,0 +1,27 @@
+# params.yaml
+# ROS2 节点参数配置文件
+# 用于演示 launch 中加载 YAML 参数文件
+
+# 格式说明：
+# 节点名:
+#   ros__parameters:
+#     参数名: 参数值
+
+# 发布者节点参数
+param_talker:
+  ros__parameters:
+    topic_name: "sensor_data"
+    publish_freq: 2.0
+    message_prefix: "[yaml_config]"
+
+# 订阅者节点参数（带命名空间版本）
+ns_listener:
+  ros__parameters:
+    topic_name: "sensor_data"
+
+# 工作节点参数
+worker_node:
+  ros__parameters:
+    max_count: 15
+    work_interval: 0.5
+    exit_code: 0

@@ -1,0 +1,14 @@
+# Goal - 机械臂运动目标
+float64 target_angle    # 目标关节角度 (弧度)
+float64 speed           # 运动速度因子 (0.1 ~ 2.0)
+---
+# Result - 运动结果
+bool success
+float64 final_angle
+float64 elapsed_time
+string message
+---
+# Feedback - 运动进度
+float64 current_angle
+float32 progress_percent
+string status

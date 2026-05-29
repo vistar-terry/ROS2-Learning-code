@@ -1,0 +1,379 @@
+<?xml version="1.0"?>
+<!--
+  diff_robot.urdf.xacro
+  两轮差速机器人主 URDF 文件
+
+  机器人规格：
+  - 底盘尺寸：0.26m(长) × 0.20m(宽) × 0.08m(高)
+  - 底盘质量：1.5kg
+  - 轮子半径：0.065m
+  - 轮子宽度：0.018m
+  - 轮距（两轮中心距）：0.22m
+  - 最大速度：0.5 m/s
+  - 最大角速度：1.0 rad/s
+
+  TF树结构：
+                            base_footprint (地面投影)
+                                  |
+                             base_link (底盘中心)
+                            /    |    \      \
+                  left_wheel  right_wheel  caster_wheel
+                      |            |           |
+               left_wheel_link  right_wheel_link  caster_link
+                      |
+                  laser_link (激光雷达)
+                  imu_link (IMU)
+                  camera_link (深度相机)
+
+  传感器话题：
+  - /scan            (sensor_msgs/LaserScan)
+  - /camera/color/image_raw  (sensor_msgs/Image)
+  - /camera/depth/image_raw  (sensor_msgs/Image)
+  - /camera/depth/points     (sensor_msgs/PointCloud2)
+  - /imu/data        (sensor_msgs/Imu)
+
+  编码器：
+  - 通过 ros2_control 的 joint_states 接口获取
+  - /joint_states 话题中包含轮子位置和速度
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="diff_robot">
+
+  <!-- ============================================================
+       包含所有宏定义文件
+       ============================================================ -->
+  <xacro:include filename="$(find diff_robot_description)/urdf/macros/inertial_macros.xacro" />
+  <xacro:include filename="$(find diff_robot_description)/urdf/sensors/lidar.urdf.xacro" />
+  <xacro:include filename="$(find diff_robot_description)/urdf/sensors/camera.urdf.xacro" />
+  <xacro:include filename="$(find diff_robot_description)/urdf/sensors/imu.urdf.xacro" />
+
+  <!-- ============================================================
+       机器人参数定义（作为 xacro 属性，方便统一修改）
+       ============================================================ -->
+  <!-- 底盘参数 -->
+  <xacro:property name="chassis_length"     value="0.52" />
+  <xacro:property name="chassis_width"      value="0.40" />
+  <xacro:property name="chassis_height"     value="0.16" />
+  <xacro:property name="chassis_mass"       value="3.0" />
+  <xacro:property name="chassis_ground_dist" value="0.05" />  <!-- 底盘离地高度 -->
+
+  <!-- 轮子参数 -->
+  <xacro:property name="wheel_radius"       value="0.08" />
+  <xacro:property name="wheel_width"        value="0.039" />
+  <xacro:property name="wheel_mass"         value="0.2" />
+  <xacro:property name="wheel_separation"   value="${chassis_width}" />  <!-- 两轮中心距 -->
+  <xacro:property name="wheel_offset_x"     value="0.0" />   <!-- 轮子前后偏移 -->
+  <xacro:property name="wheel_offset_z"     value="${wheel_radius-chassis_ground_dist}" />   <!-- 轮子上下偏移 -->
+
+  <!-- 万向轮参数 -->
+  <xacro:property name="caster_radius"     value="${chassis_ground_dist/2}" />
+  <xacro:property name="caster_mass"        value="0.10" />
+  <xacro:property name="caster_offset_x"   value="0.20" />
+
+  <!-- 传感器参数 -->
+  <xacro:property name="lidar_height"      value="0.06" />  <!-- 激光雷达圆柱体高度 -->
+
+  <!-- ============================================================
+       base_footprint：地面投影坐标系（REP-105 约定）
+       Z=0，代表机器人在地面上的投影点
+       ============================================================ -->
+  <link name="base_footprint" />
+
+  <!-- base_footprint → base_link 变换 -->
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_link" />
+    <!-- 底盘中心在地面之上 chassis_ground_dist + chassis_height/2 -->
+    <origin xyz="0 0 ${chassis_ground_dist}" rpy="0 0 0" />
+  </joint>
+
+  <!-- ============================================================
+       base_link：机器人底盘中心坐标系
+       ============================================================ -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0" />
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}" />
+      </geometry>
+      <material name="chassis_color">
+        <color rgba="0.6 0.6 0.6 1.0" />  <!-- 灰色 -->
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}" />
+      </geometry>
+    </collision>
+
+    <!-- 底盘惯性参数 -->
+    <xacro:box_inertial
+      x="${chassis_length}" y="${chassis_width}" z="${chassis_height}"
+      mass="${chassis_mass}" />
+  </link>
+
+  <!-- Gazebo 底盘材质 -->
+  <gazebo reference="base_link">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+  <!-- ============================================================
+       左轮
+       continuous 关节：可以无限旋转
+       轮子沿Y轴旋转（roll轴）
+       ============================================================ -->
+  <link name="left_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0" />
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}" />
+      </geometry>
+      <material name="wheel_color">
+        <color rgba="0.1 0.1 0.1 1.0" />
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0" />
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}" />
+      </geometry>
+    </collision>
+
+    <!-- 轮子惯性参数 -->
+    <xacro:cylinder_inertial
+      radius="${wheel_radius}" length="${wheel_width}"
+      mass="${wheel_mass}" />
+  </link>
+
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="left_wheel_link" />
+    <origin xyz="${wheel_offset_x} ${wheel_separation/2} ${wheel_offset_z}" rpy="0 0 0" />
+    <!-- 旋转轴：绕Y轴旋转 -->
+    <axis xyz="0 1 0" />
+    <!-- 物理仿真参数 -->
+    <dynamics damping="0.01" friction="0.1" />
+    <!-- 关节限位（continuous 无限位，但可以设置力矩限制） -->
+    <effort limit="10.0" />
+    <velocity limit="10.0" />
+  </joint>
+
+  <!-- Gazebo 轮子材质 + 摩擦力 -->
+  <gazebo reference="left_wheel_link">
+    <material>Gazebo/DarkGrey</material>
+    <mu1>1.0</mu1>   <!-- 静摩擦系数 -->
+    <mu2>1.0</mu2>   <!-- 动摩擦系数 -->
+    <kp>1000000.0</kp>  <!-- 接触刚度 -->
+    <kd>100.0</kd>       <!-- 接触阻尼 -->
+    <minDepth>0.001</minDepth>  <!-- 最小穿透深度 -->
+  </gazebo>
+
+  <!-- ============================================================
+       右轮
+       ============================================================ -->
+  <link name="right_wheel_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="1.5708 0 0" />
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}" />
+      </geometry>
+      <material name="wheel_color" />
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="1.5708 0 0" />
+      <geometry>
+        <cylinder radius="${wheel_radius}" length="${wheel_width}" />
+      </geometry>
+    </collision>
+
+    <xacro:cylinder_inertial
+      radius="${wheel_radius}" length="${wheel_width}"
+      mass="${wheel_mass}" />
+  </link>
+
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="right_wheel_link" />
+    <origin xyz="${wheel_offset_x} -${wheel_separation/2} ${wheel_offset_z}" rpy="0 0 0" />
+    <axis xyz="0 1 0" />
+    <dynamics damping="0.01" friction="0.1" />
+    <effort limit="10.0" />
+    <velocity limit="10.0" />
+  </joint>
+
+  <gazebo reference="right_wheel_link">
+    <material>Gazebo/DarkGrey</material>
+    <mu1>1.0</mu1>
+    <mu2>1.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+    <minDepth>0.001</minDepth>
+  </gazebo>
+
+  <!-- ============================================================
+       前万向轮（caster wheel）
+       使用球体模拟，固定在底盘后部
+       摩擦系数很低，允许自由滑动
+       ============================================================ -->
+  <link name="front_caster_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="${caster_radius}" />
+      </geometry>
+      <material name="caster_color">
+        <color rgba="0.4 0.4 0.4 1.0" />
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="${caster_radius}" />
+      </geometry>
+    </collision>
+
+    <xacro:sphere_inertial radius="${caster_radius}" mass="${caster_mass}" />
+  </link>
+
+  <joint name="front_caster_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="front_caster_link" />
+    <!-- 万向轮在底盘前下方 -->
+    <origin xyz="${caster_offset_x} 0 ${-caster_radius}" rpy="0 0 0" />
+  </joint>
+
+  <!-- 万向轮：极低摩擦力（允许自由滑动） -->
+  <gazebo reference="front_caster_link">
+    <material>Gazebo/Grey</material>
+    <mu1>0.0</mu1>    <!-- 零摩擦！ -->
+    <mu2>0.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+
+  <!-- ============================================================
+       后万向轮（caster wheel）
+       使用球体模拟，固定在底盘后部
+       摩擦系数很低，允许自由滑动
+       ============================================================ -->
+  <link name="back_caster_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="${caster_radius}" />
+      </geometry>
+      <material name="caster_color">
+        <color rgba="0.4 0.4 0.4 1.0" />
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="${caster_radius}" />
+      </geometry>
+    </collision>
+
+    <xacro:sphere_inertial radius="${caster_radius}" mass="${caster_mass}" />
+  </link>
+
+  <joint name="back_caster_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="back_caster_link" />
+    <!-- 万向轮在底盘后下方 -->
+    <origin xyz="${-caster_offset_x} 0 ${-caster_radius}" rpy="0 0 0" />
+  </joint>
+
+  <!-- 万向轮：极低摩擦力（允许自由滑动） -->
+  <gazebo reference="back_caster_link">
+    <material>Gazebo/Grey</material>
+    <mu1>0.0</mu1>    <!-- 零摩擦！ -->
+    <mu2>0.0</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+
+  <!-- ============================================================
+       传感器实例化
+       调用前面定义的传感器宏
+       ============================================================ -->
+  <!-- 激光雷达：z = 底盘离地高度 + 底盘高度 + 激光雷达高度/2 -->
+  <xacro:lidar_sensor
+    parent="base_link"
+    prefix="laser"
+    xyz="0.18 0 ${chassis_height + lidar_height/2}"
+    rpy="0 0 0"
+    update_rate="5"
+    samples="360"
+    range_min="0.15"
+    range_max="12.0" />
+
+  <!-- 深度相机：底盘前方偏上 -->
+  <xacro:camera_sensor
+    parent="base_link"
+    prefix="camera"
+    xyz="0.26 0 0.12"
+    rpy="0 0 0"
+    update_rate="30"
+    width="640"
+    height="480"
+    fov="1.047"
+    depth_range_max="10.0" />
+
+  <!-- IMU：底盘中心偏上 -->
+  <xacro:imu_sensor
+    parent="base_link"
+    prefix="imu"
+    xyz="0 0 0.08"
+    rpy="0 0 0"
+    update_rate="100" />
+
+  <!-- ============================================================
+       ros2_control 硬件接口定义
+       用于 Gazebo Harmonic 仿真中通过 ros2_control 控制轮子
+       ============================================================ -->
+  <ros2_control name="DiffBotSystem" type="system">
+    <hardware>
+      <!-- 使用 Gazebo Harmonic 硬件接口插件 -->
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+
+    <!-- 左轮关节 -->
+    <joint name="left_wheel_joint">
+      <!-- 命令接口：控制器发送速度命令 -->
+      <command_interface name="velocity" />
+      <!-- 状态接口：读取关节状态 -->
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+
+    <!-- 右轮关节 -->
+    <joint name="right_wheel_joint">
+      <command_interface name="velocity" />
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+  </ros2_control>
+
+  <!-- ============================================================
+       Gazebo Harmonic ros2_control 插件
+       将 Gazebo Harmonic 仿真与 ros2_control 连接
+       ============================================================ -->
+  <gazebo>
+    <plugin name="gz_sim_ros2_control" filename="libgz_sim_ros2_control.so">
+      <robot_param>robot_description</robot_param>
+      <ros>
+        <namespace>diff_robot</namespace>
+      </ros>
+      <control_manager>
+        <param name="update_rate">100</param>
+        <param name="use_sim_time">true</param>
+      </control_manager>
+    </plugin>
+  </gazebo>
+
+</robot>

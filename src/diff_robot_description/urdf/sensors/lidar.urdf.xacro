@@ -1,0 +1,130 @@
+<?xml version="1.0"?>
+<!--
+  sensors/lidar.urdf.xacro
+  激光雷达传感器 Xacro 宏
+
+  功能：定义激光雷达的视觉、碰撞、惯性及 Gazebo 传感器插件
+
+  知识点：
+  - Gazebo ray 传感器插件配置
+  - 激光雷达参数：角度范围、分辨率、噪声模型
+  - 话题发布格式：sensor_msgs/LaserScan
+
+  默认参数（模拟 RPLIDAR A1）：
+  - 角度范围：-180° ~ +180°（360°全覆盖）
+  - 角度分辨率：1°（360个采样点）
+  - 测量范围：0.15m ~ 12m
+  - 频率：5Hz
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="lidar_sensor">
+
+  <xacro:include filename="$(find diff_robot_description)/urdf/macros/inertial_macros.xacro" />
+
+  <!-- ============================================================
+       激光雷达宏
+       参数：
+         parent        - 父坐标系名
+         prefix        - 命名前缀（用于多雷达场景）
+         xyz           - 安装位置偏移
+         rpy           - 安装姿态偏移
+         update_rate   - 扫描频率（Hz）
+         samples       - 每圈采样点数
+         range_min     - 最小测量距离（米）
+         range_max     - 最大测量距离（米）
+       ============================================================ -->
+  <xacro:macro name="lidar_sensor" params="
+    parent:=base_link
+    prefix:=laser
+    xyz:='0.24 0 0.28'
+    rpy:='0 0 0'
+    update_rate:=5
+    samples:=360
+    range_min:=0.15
+    range_max:=12.0">
+
+    <!-- 雷达 link（圆柱体，模拟雷达外壳） -->
+    <link name="${prefix}_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <!-- 圆柱体：半径6cm，高度6cm -->
+          <cylinder radius="0.06" length="0.06" />
+        </geometry>
+        <material name="dark_grey">
+          <color rgba="0.3 0.3 0.3 1.0" />
+        </material>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <cylinder radius="0.06" length="0.06" />
+        </geometry>
+      </collision>
+
+      <!-- 惯性参数：小型雷达约0.1kg -->
+      <xacro:cylinder_inertial radius="0.06" length="0.06" mass="0.1" />
+    </link>
+
+    <!-- 雷达 joint（固定在父坐标系上） -->
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}" />
+      <child link="${prefix}_link" />
+      <origin xyz="${xyz}" rpy="${rpy}" />
+    </joint>
+
+    <!-- Gazebo 雷达传感器插件 -->
+    <gazebo reference="${prefix}_link">
+      <!-- 传感器视觉材质 -->
+      <material>Gazebo/DarkGrey</material>
+
+      <!-- 传感器定义 -->
+      <sensor name="${prefix}_sensor" type="ray">
+        <always_on>true</always_on>
+        <update_rate>${update_rate}</update_rate>
+        <visualize>true</visualize>  <!-- 在Gazebo中可视化射线 -->
+
+        <ray>
+          <scan>
+            <!-- 水平扫描模式 -->
+            <horizontal>
+              <samples>${samples}</samples>
+              <!-- 分辨率：角度/采样点数，这里是1° -->
+              <resolution>1</resolution>
+              <!-- 最小角度（弧度）-180° -->
+              <min_angle>-3.14159</min_angle>
+              <!-- 最大角度（弧度）+180° -->
+              <max_angle>3.14159</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>${range_min}</min>
+            <max>${range_max}</max>
+            <resolution>0.01</resolution>  <!-- 距离分辨率1cm -->
+          </range>
+          <!-- 测量噪声模型 -->
+          <noise>
+            <type>gaussian</type>
+            <!-- 高斯噪声：均值0，标准差0.01m -->
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </ray>
+
+        <!-- Gazebo ROS 激光扫描插件 -->
+        <plugin name="${prefix}_plugin" filename="libgazebo_ros_ray_sensor.so">
+          <ros>
+            <!-- 命名空间（留空使用全局命名空间） -->
+            <namespace></namespace>
+            <!-- 重映射参数名 -->
+            <remapping>~/out:=scan</remapping>
+          </ros>
+          <output_type>sensor_msgs/LaserScan</output_type>
+          <frame_name>${prefix}_link</frame_name>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+
+</robot>

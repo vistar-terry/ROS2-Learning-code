@@ -1,0 +1,18 @@
+# Goal - 导航目标
+float64 target_x
+float64 target_y
+float64 speed           # 速度因子 (0.1 ~ 2.0)
+---
+# Result - 导航结果
+bool success
+float64 final_x
+float64 final_y
+float64 elapsed_time
+string message
+---
+# Feedback - 导航进度
+float64 current_x
+float64 current_y
+float32 progress_percent
+float64 distance_remaining
+string status

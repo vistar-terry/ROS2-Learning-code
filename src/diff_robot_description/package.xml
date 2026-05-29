@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>diff_robot_description</name>
+  <version>0.0.1</version>
+  <description>两轮差速机器人URDF模型描述包 — 包含物理属性、传感器（激光雷达/相机/IMU/编码器）、Gazebo仿真与RViz可视化</description>
+  <maintainer email="vistar@todo.todo">vistar</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- URDF/xacro 依赖 -->
+  <depend>urdf</depend>
+  <depend>xacro</depend>
+
+  <!-- 机器人状态发布 -->
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher_gui</exec_depend>
+
+  <!-- RViz 可视化 -->
+  <exec_depend>rviz2</exec_depend>
+
+  <!-- Gazebo 仿真 -->
+  <exec_depend>gazebo_ros</exec_depend>
+  <exec_depend>gazebo_plugins</exec_depend>
+
+  <!-- 传感器消息 -->
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <!-- ros2_control Gazebo 集成 -->
+  <exec_depend>gazebo_ros2_control</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

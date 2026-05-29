@@ -1,0 +1,8 @@
+# 请求：起点和终点位置
+geometry_msgs/Point start
+geometry_msgs/Point goal
+---
+# 响应：路径点和执行状态
+geometry_msgs/Point[] path_points
+bool success
+string message  # 状态信息

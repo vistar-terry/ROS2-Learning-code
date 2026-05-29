@@ -1,0 +1,6 @@
+# 请求：设置LED状态
+uint8 led_id    # LED编号
+bool led_on     # 开关状态
+---
+# 响应：执行结果
+bool success

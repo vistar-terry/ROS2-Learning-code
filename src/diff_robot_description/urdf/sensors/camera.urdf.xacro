@@ -1,0 +1,180 @@
+<?xml version="1.0"?>
+<!--
+  sensors/camera.urdf.xacro
+  相机传感器 Xacro 宏
+
+  功能：定义深度相机的视觉、碰撞、惯性及 Gazebo 传感器插件
+
+  知识点：
+  - Gazebo camera/depth 传感器插件配置
+  - 相机参数：分辨率、视野角(FOV)、图像格式
+  - 话题发布：sensor_msgs/Image, sensor_msgs/CameraInfo
+  - 深度相机额外发布：sensor_msgs/PointCloud2
+
+  默认参数（模拟 Intel RealSense 类深度相机）：
+  - 分辨率：640×480
+  - 视野角：1.047rad (~60°)
+  - 深度范围：0.1m ~ 10m
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="camera_sensor">
+
+  <xacro:include filename="$(find diff_robot_description)/urdf/macros/inertial_macros.xacro" />
+
+  <!-- ============================================================
+       相机宏
+       参数：
+         parent        - 父坐标系名
+         prefix        - 命名前缀
+         xyz           - 安装位置
+         rpy           - 安装姿态
+         update_rate   - 图像发布频率（Hz）
+         width         - 图像宽度（像素）
+         height        - 图像高度（像素）
+         fov           - 水平视野角（弧度）
+         depth_range_max - 深度最大距离（米）
+       ============================================================ -->
+  <xacro:macro name="camera_sensor" params="
+    parent:=base_link
+    prefix:=camera
+    xyz:='0.36 0 0.16'
+    rpy:='0 0 0'
+    update_rate:=30
+    width:=640
+    height:=480
+    fov:=1.047
+    depth_range_max:=10.0">
+
+    <!-- 相机 link（长方体，模拟相机外壳） -->
+    <link name="${prefix}_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <!-- 相机外壳：2cm x 10cm x 3cm -->
+          <box size="0.02 0.10 0.03" />
+        </geometry>
+        <material name="black">
+          <color rgba="0.1 0.1 0.1 1.0" />
+        </material>
+      </visual>
+
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <box size="0.02 0.10 0.03" />
+        </geometry>
+      </collision>
+
+      <!-- 惯性参数：小型相机约0.05kg -->
+      <xacro:box_inertial x="0.02" y="0.10" z="0.03" mass="0.05" />
+    </link>
+
+    <!-- 相机关节 -->
+    <joint name="${prefix}_joint" type="fixed">
+      <parent link="${parent}" />
+      <child link="${prefix}_link" />
+      <origin xyz="${xyz}" rpy="${rpy}" />
+    </joint>
+
+    <!-- ============================================================
+         光学坐标系（Optical Frame）
+         ROS 图像处理的约定：
+         - X 轴向右
+         - Y 轴向下
+         - Z 轴向前（光轴方向）
+         需要从相机坐标系旋转到光学坐标系：rpy="-π/2 0 -π/2"
+         ============================================================ -->
+    <link name="${prefix}_color_optical_frame" />
+    <joint name="${prefix}_color_optical_joint" type="fixed">
+      <parent link="${prefix}_link" />
+      <child link="${prefix}_color_optical_frame" />
+      <!-- 从相机坐标系到光学坐标系的旋转 -->
+      <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708" />
+    </joint>
+
+    <link name="${prefix}_depth_optical_frame" />
+    <joint name="${prefix}_depth_optical_joint" type="fixed">
+      <parent link="${prefix}_link" />
+      <child link="${prefix}_depth_optical_frame" />
+      <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708" />
+    </joint>
+
+    <!-- Gazebo 相机传感器插件 -->
+    <gazebo reference="${prefix}_link">
+      <material>Gazebo/Black</material>
+
+      <!-- RGB 相机传感器 -->
+      <sensor name="${prefix}_color_sensor" type="camera">
+        <always_on>true</always_on>
+        <update_rate>${update_rate}</update_rate>
+        <visualize>true</visualize>
+
+        <camera name="${prefix}_color">
+          <horizontal_fov>${fov}</horizontal_fov>
+          <image>
+            <width>${width}</width>
+            <height>${height}</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>${depth_range_max}</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+
+        <plugin name="${prefix}_color_controller" filename="libgazebo_ros_camera.so">
+          <ros>
+            <namespace></namespace>
+            <remapping>image_raw:=color/image_raw</remapping>
+            <remapping>camera_info:=color/camera_info</remapping>
+          </ros>
+          <frame_name>${prefix}_color_optical_frame</frame_name>
+          <hack_baseline>0.07</hack_baseline>
+        </plugin>
+      </sensor>
+
+      <!-- 深度传感器 -->
+      <sensor name="${prefix}_depth_sensor" type="depth">
+        <always_on>true</always_on>
+        <update_rate>${update_rate}</update_rate>
+        <visualize>false</visualize>
+
+        <camera name="${prefix}_depth">
+          <horizontal_fov>${fov}</horizontal_fov>
+          <image>
+            <width>${width}</width>
+            <height>${height}</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>${depth_range_max}</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </camera>
+
+        <plugin name="${prefix}_depth_controller" filename="libgazebo_ros_depth_camera.so">
+          <ros>
+            <namespace></namespace>
+            <remapping>depth/image_raw:=depth/image_raw</remapping>
+            <remapping>depth/camera_info:=depth/camera_info</remapping>
+            <remapping>points:=depth/points</remapping>
+          </ros>
+          <frame_name>${prefix}_depth_optical_frame</frame_name>
+          <hack_baseline>0.07</hack_baseline>
+          <min_depth>0.1</min_depth>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+
+</robot>

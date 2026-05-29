@@ -1,0 +1,10 @@
+<library path="diff_drive_hardware">
+  <class name="diff_robot_control/DiffDriveHardware"
+         type="diff_robot_control::DiffDriveHardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      两轮差速机器人硬件接口插件
+      可用于 mock 仿真或作为真实硬件驱动的模板
+    </description>
+  </class>
+</library>
