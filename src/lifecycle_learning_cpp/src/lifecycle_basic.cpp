@@ -18,7 +18,8 @@
 using namespace std::chrono_literals;
 
 // 继承 rclcpp_lifecycle::LifecycleNode 而非 rclcpp::Node
-class LifecycleBasicNode : public rclcpp_lifecycle::LifecycleNode {
+class LifecycleBasicNode : public rclcpp_lifecycle::LifecycleNode
+{
 public:
     // ================================================================
     // 构造函数 —— 使用 LifecycleNode 基类
@@ -32,10 +33,10 @@ public:
         this->declare_parameter("demo_param", 42);
 
         RCLCPP_INFO(this->get_logger(),
-            "=== 基础生命周期节点已创建 ===");
+                    "=== 基础生命周期节点已创建 ===");
         RCLCPP_INFO(this->get_logger(),
-            "初始状态: Unconfigured [%s]",
-            this->get_current_state().label().c_str());
+                    "初始状态: Unconfigured [%s]",
+                    this->get_current_state().label().c_str());
 
         // ================================================================
         // 注册状态转换事件回调（可选，用于监控所有状态变化）
@@ -43,12 +44,13 @@ public:
         // ================================================================
         transition_event_sub_ = this->create_subscription<lifecycle_msgs::msg::TransitionEvent>(
             "/lifecycle_basic/transition_event", 10,
-            [this](const lifecycle_msgs::msg::TransitionEvent::SharedPtr event) {
+            [this](const lifecycle_msgs::msg::TransitionEvent::SharedPtr event)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[转换事件] %s → %s (转换ID=%d)",
-                    event->start_state.label.c_str(),
-                    event->goal_state.label.c_str(),
-                    event->transition.id);
+                            "[转换事件] %s → %s (转换ID=%d)",
+                            event->start_state.label.c_str(),
+                            event->goal_state.label.c_str(),
+                            event->transition.id);
             });
     }
 
@@ -65,22 +67,22 @@ public:
     CallbackReturn on_configure(const rclcpp_lifecycle::State & /*previous_state*/) override
     {
         RCLCPP_INFO(this->get_logger(),
-            "━━━ on_configure ━━━");
+                    "━━━ on_configure ━━━");
         RCLCPP_INFO(this->get_logger(),
-            "  Unconfigured → Inactive");
+                    "  Unconfigured → Inactive");
         RCLCPP_INFO(this->get_logger(),
-            "  在此执行：初始化资源、读取配置、创建发布器");
+                    "  在此执行：初始化资源、读取配置、创建发布器");
 
         // 模拟初始化操作
         config_value_ = this->get_parameter("demo_param").as_int();
         RCLCPP_INFO(this->get_logger(),
-            "  读取参数 demo_param = %d", config_value_);
+                    "  读取参数 demo_param = %d", config_value_);
 
         // 模拟偶尔失败的情况（演示错误处理）
         // return CallbackReturn::FAILURE;  // 取消注释可测试失败
 
         RCLCPP_INFO(this->get_logger(),
-            "  on_configure 成功 → 进入 Inactive 状态");
+                    "  on_configure 成功 → 进入 Inactive 状态");
         return CallbackReturn::SUCCESS;
     }
 
@@ -94,21 +96,21 @@ public:
     //   - 使能硬件输出
     //   - 启用数据流
     // ================================================================
-    CallbackReturn on_activate(const rclcpp_lifecycle::State & state) override
+    CallbackReturn on_activate(const rclcpp_lifecycle::State &state) override
     {
         RCLCPP_INFO(this->get_logger(),
-            "━━━ on_activate ━━━");
+                    "━━━ on_activate ━━━");
         RCLCPP_INFO(this->get_logger(),
-            "  Inactive → Active");
+                    "  Inactive → Active");
         RCLCPP_INFO(this->get_logger(),
-            "  在此执行：激活发布器、启动定时器、使能硬件");
+                    "  在此执行：激活发布器、启动定时器、使能硬件");
 
         // ⚠️ 必须调用父类的 on_activate！
         //    它负责激活所有 LifecyclePublisher
         rclcpp_lifecycle::LifecycleNode::on_activate(state);
 
         RCLCPP_INFO(this->get_logger(),
-            "  on_activate 成功 → 进入 Active 状态");
+                    "  on_activate 成功 → 进入 Active 状态");
         return CallbackReturn::SUCCESS;
     }
 
@@ -122,20 +124,20 @@ public:
     //   - 禁用硬件输出
     //   - 保留内存和连接
     // ================================================================
-    CallbackReturn on_deactivate(const rclcpp_lifecycle::State & state) override
+    CallbackReturn on_deactivate(const rclcpp_lifecycle::State &state) override
     {
         RCLCPP_INFO(this->get_logger(),
-            "━━━ on_deactivate ━━━");
+                    "━━━ on_deactivate ━━━");
         RCLCPP_INFO(this->get_logger(),
-            "  Active → Inactive");
+                    "  Active → Inactive");
         RCLCPP_INFO(this->get_logger(),
-            "  在此执行：停用发布器、停止定时器、禁用输出");
+                    "  在此执行：停用发布器、停止定时器、禁用输出");
 
         // ⚠️ 必须调用父类的 on_deactivate！
         rclcpp_lifecycle::LifecycleNode::on_deactivate(state);
 
         RCLCPP_INFO(this->get_logger(),
-            "  on_deactivate 成功 → 进入 Inactive 状态");
+                    "  on_deactivate 成功 → 进入 Inactive 状态");
         return CallbackReturn::SUCCESS;
     }
 
@@ -152,16 +154,16 @@ public:
     CallbackReturn on_cleanup(const rclcpp_lifecycle::State & /*previous_state*/) override
     {
         RCLCPP_INFO(this->get_logger(),
-            "━━━ on_cleanup ━━━");
+                    "━━━ on_cleanup ━━━");
         RCLCPP_INFO(this->get_logger(),
-            "  Inactive → Unconfigured");
+                    "  Inactive → Unconfigured");
         RCLCPP_INFO(this->get_logger(),
-            "  在此执行：释放资源、关闭连接、重置状态");
+                    "  在此执行：释放资源、关闭连接、重置状态");
 
         config_value_ = 0;
 
         RCLCPP_INFO(this->get_logger(),
-            "  on_cleanup 成功 → 进入 Unconfigured 状态");
+                    "  on_cleanup 成功 → 进入 Unconfigured 状态");
         return CallbackReturn::SUCCESS;
     }
 
@@ -171,14 +173,14 @@ public:
     // 含义：节点关闭，释放所有资源
     // 从任何主状态都可以转换到 Finalized
     // ================================================================
-    CallbackReturn on_shutdown(const rclcpp_lifecycle::State & previous_state) override
+    CallbackReturn on_shutdown(const rclcpp_lifecycle::State &previous_state) override
     {
         RCLCPP_INFO(this->get_logger(),
-            "━━━ on_shutdown ━━━");
+                    "━━━ on_shutdown ━━━");
         RCLCPP_INFO(this->get_logger(),
-            "  %s → Finalized", previous_state.label().c_str());
+                    "  %s → Finalized", previous_state.label().c_str());
         RCLCPP_INFO(this->get_logger(),
-            "  在此执行：安全关闭、释放所有资源");
+                    "  在此执行：安全关闭、释放所有资源");
 
         return CallbackReturn::SUCCESS;
     }
@@ -188,7 +190,8 @@ private:
     rclcpp::Subscription<lifecycle_msgs::msg::TransitionEvent>::SharedPtr transition_event_sub_;
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     rclcpp::init(argc, argv);
 
     auto node = std::make_shared<LifecycleBasicNode>();
