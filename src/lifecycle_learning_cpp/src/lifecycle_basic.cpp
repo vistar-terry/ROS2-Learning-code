@@ -3,8 +3,8 @@
  * @brief ① 基础生命周期节点 —— 4个转换回调 + 状态查询
  *
  * 知识点：
- * - LifecycleNode 的4个主要状态
- * - 4个转换回调（on_configure/on_activate/on_deactivate/on_cleanup）
+ * - LifecycleNode 的4个主要状态(Unconfigured/Inactive/Active/Finalized)
+ * - 4个转换回调(on_configure/on_activate/on_deactivate/on_cleanup)
  * - on_shutdown 回调
  * - 状态转换成功/失败的返回值
  * - 通过命令行工具查看和切换状态
@@ -32,11 +32,8 @@ public:
         // 声明参数（生命周期节点同样支持参数）
         this->declare_parameter("demo_param", 42);
 
-        RCLCPP_INFO(this->get_logger(),
-                    "=== 基础生命周期节点已创建 ===");
-        RCLCPP_INFO(this->get_logger(),
-                    "初始状态: Unconfigured [%s]",
-                    this->get_current_state().label().c_str());
+        RCLCPP_INFO(this->get_logger(), "=== LifecycleBasicNode is created ===");
+        RCLCPP_INFO(this->get_logger(), "Start State: [%s]", this->get_current_state().label().c_str());
 
         // ================================================================
         // 注册状态转换事件回调（可选，用于监控所有状态变化）
@@ -105,7 +102,7 @@ public:
         RCLCPP_INFO(this->get_logger(),
                     "  在此执行：激活发布器、启动定时器、使能硬件");
 
-        // ⚠️ 必须调用父类的 on_activate！
+        // 必须调用父类的 on_activate！
         //    它负责激活所有 LifecyclePublisher
         rclcpp_lifecycle::LifecycleNode::on_activate(state);
 
@@ -133,7 +130,7 @@ public:
         RCLCPP_INFO(this->get_logger(),
                     "  在此执行：停用发布器、停止定时器、禁用输出");
 
-        // ⚠️ 必须调用父类的 on_deactivate！
+        // 必须调用父类的 on_deactivate！
         rclcpp_lifecycle::LifecycleNode::on_deactivate(state);
 
         RCLCPP_INFO(this->get_logger(),
@@ -196,7 +193,7 @@ int main(int argc, char **argv)
 
     auto node = std::make_shared<LifecycleBasicNode>();
 
-    // ⚠️ 生命周期节点不能用 rclcpp::spin(node)
+    // 生命周期节点不能用 rclcpp::spin(node)
     //    必须通过 executor 显式驱动，add_node 也需要 get_node_base_interface()
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node->get_node_base_interface());
