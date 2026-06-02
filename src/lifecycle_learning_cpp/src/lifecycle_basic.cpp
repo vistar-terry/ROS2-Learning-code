@@ -23,7 +23,7 @@ class LifecycleBasicNode : public rclcpp_lifecycle::LifecycleNode
 public:
     // ================================================================
     // 构造函数 —— 使用 LifecycleNode 基类
-    //    注意：LifecycleNode 和普通 Node 的基类不同
+    //    注意!!!：LifecycleNode 和普通 Node 的基类不同
     //    它自带状态机和转换服务
     // ================================================================
     LifecycleBasicNode()
@@ -37,14 +37,14 @@ public:
 
         // ================================================================
         // 注册状态转换事件回调（可选，用于监控所有状态变化）
-        //    每次状态转换都会触发此回调
+        // 每次状态转换都会触发此回调
         // ================================================================
         transition_event_sub_ = this->create_subscription<lifecycle_msgs::msg::TransitionEvent>(
             "/lifecycle_basic/transition_event", 10,
             [this](const lifecycle_msgs::msg::TransitionEvent::SharedPtr event)
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[转换事件] %s → %s (转换ID=%d)",
+                            "[TransitionEvent] %s → %s (transition ID=%d)",
                             event->start_state.label.c_str(),
                             event->goal_state.label.c_str(),
                             event->transition.id);
@@ -63,23 +63,18 @@ public:
     // ================================================================
     CallbackReturn on_configure(const rclcpp_lifecycle::State & /*previous_state*/) override
     {
-        RCLCPP_INFO(this->get_logger(),
-                    "━━━ on_configure ━━━");
-        RCLCPP_INFO(this->get_logger(),
-                    "  Unconfigured → Inactive");
-        RCLCPP_INFO(this->get_logger(),
-                    "  在此执行：初始化资源、读取配置、创建发布器");
+        RCLCPP_INFO(this->get_logger(), "━━━ on_configure ━━━");
+        RCLCPP_INFO(this->get_logger(), "  Unconfigured → Inactive");
+        RCLCPP_INFO(this->get_logger(), "  Perform here: initialize resources, read configuration, create publisher");
 
         // 模拟初始化操作
         config_value_ = this->get_parameter("demo_param").as_int();
-        RCLCPP_INFO(this->get_logger(),
-                    "  读取参数 demo_param = %d", config_value_);
+        RCLCPP_INFO(this->get_logger(), "  read configuration, demo_param = %d", config_value_);
 
         // 模拟偶尔失败的情况（演示错误处理）
         // return CallbackReturn::FAILURE;  // 取消注释可测试失败
 
-        RCLCPP_INFO(this->get_logger(),
-                    "  on_configure 成功 → 进入 Inactive 状态");
+        RCLCPP_INFO(this->get_logger(), "  on_configure Enter → Exit Inactive State");
         return CallbackReturn::SUCCESS;
     }
 
@@ -95,19 +90,15 @@ public:
     // ================================================================
     CallbackReturn on_activate(const rclcpp_lifecycle::State &state) override
     {
-        RCLCPP_INFO(this->get_logger(),
-                    "━━━ on_activate ━━━");
-        RCLCPP_INFO(this->get_logger(),
-                    "  Inactive → Active");
-        RCLCPP_INFO(this->get_logger(),
-                    "  在此执行：激活发布器、启动定时器、使能硬件");
+        RCLCPP_INFO(this->get_logger(), "━━━ on_activate ━━━");
+        RCLCPP_INFO(this->get_logger(), "  Inactive → Active");
+        RCLCPP_INFO(this->get_logger(), "  Perform here: activate publisher, start timer, enable hardware");
 
-        // 必须调用父类的 on_activate！
-        //    它负责激活所有 LifecyclePublisher
+        // 注意!!!：必须调用父类的 on_activate！
+        // 它负责激活所有 LifecyclePublisher
         rclcpp_lifecycle::LifecycleNode::on_activate(state);
 
-        RCLCPP_INFO(this->get_logger(),
-                    "  on_activate 成功 → 进入 Active 状态");
+        RCLCPP_INFO(this->get_logger(), "  on_activate SUCCESS → Enter Active State");
         return CallbackReturn::SUCCESS;
     }
 
@@ -123,18 +114,14 @@ public:
     // ================================================================
     CallbackReturn on_deactivate(const rclcpp_lifecycle::State &state) override
     {
-        RCLCPP_INFO(this->get_logger(),
-                    "━━━ on_deactivate ━━━");
-        RCLCPP_INFO(this->get_logger(),
-                    "  Active → Inactive");
-        RCLCPP_INFO(this->get_logger(),
-                    "  在此执行：停用发布器、停止定时器、禁用输出");
+        RCLCPP_INFO(this->get_logger(), "━━━ on_deactivate ━━━");
+        RCLCPP_INFO(this->get_logger(), "  Active → Inactive");
+        RCLCPP_INFO(this->get_logger(), "  Perform here: deactivate publisher, stop timer, disable output");
 
-        // 必须调用父类的 on_deactivate！
+        // 注意!!!：必须调用父类的 on_deactivate！
         rclcpp_lifecycle::LifecycleNode::on_deactivate(state);
 
-        RCLCPP_INFO(this->get_logger(),
-                    "  on_deactivate 成功 → 进入 Inactive 状态");
+        RCLCPP_INFO(this->get_logger(), "  on_deactivate SUCCESS → Enter Inactive State");
         return CallbackReturn::SUCCESS;
     }
 
@@ -150,17 +137,13 @@ public:
     // ================================================================
     CallbackReturn on_cleanup(const rclcpp_lifecycle::State & /*previous_state*/) override
     {
-        RCLCPP_INFO(this->get_logger(),
-                    "━━━ on_cleanup ━━━");
-        RCLCPP_INFO(this->get_logger(),
-                    "  Inactive → Unconfigured");
-        RCLCPP_INFO(this->get_logger(),
-                    "  在此执行：释放资源、关闭连接、重置状态");
+        RCLCPP_INFO(this->get_logger(), "━━━ on_cleanup ━━━");
+        RCLCPP_INFO(this->get_logger(), "  Inactive → Unconfigured");
+        RCLCPP_INFO(this->get_logger(), "  Perform here: release resources, close connections, reset state");
 
         config_value_ = 0;
 
-        RCLCPP_INFO(this->get_logger(),
-                    "  on_cleanup 成功 → 进入 Unconfigured 状态");
+        RCLCPP_INFO(this->get_logger(), "  on_cleanup SUCCESS → Enter Unconfigured State");
         return CallbackReturn::SUCCESS;
     }
 
@@ -172,12 +155,9 @@ public:
     // ================================================================
     CallbackReturn on_shutdown(const rclcpp_lifecycle::State &previous_state) override
     {
-        RCLCPP_INFO(this->get_logger(),
-                    "━━━ on_shutdown ━━━");
-        RCLCPP_INFO(this->get_logger(),
-                    "  %s → Finalized", previous_state.label().c_str());
-        RCLCPP_INFO(this->get_logger(),
-                    "  在此执行：安全关闭、释放所有资源");
+        RCLCPP_INFO(this->get_logger(), "━━━ on_shutdown ━━━");
+        RCLCPP_INFO(this->get_logger(), "  %s → Finalized", previous_state.label().c_str());
+        RCLCPP_INFO(this->get_logger(), "  Perform here: safe shutdown, release all resources");
 
         return CallbackReturn::SUCCESS;
     }
@@ -194,7 +174,7 @@ int main(int argc, char **argv)
     auto node = std::make_shared<LifecycleBasicNode>();
 
     // 生命周期节点不能用 rclcpp::spin(node)
-    //    必须通过 executor 显式驱动，add_node 也需要 get_node_base_interface()
+    // 必须通过 executor 显式驱动，add_node 也需要 get_node_base_interface()
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_node(node->get_node_base_interface());
     executor.spin();
@@ -209,7 +189,6 @@ int main(int argc, char **argv)
  * ══════════════════════════════════════════════════════════
  *
  * # 查看当前状态
- * ros2 lifecycle list /lifecycle_basic
  * ros2 lifecycle get /lifecycle_basic
  *
  * # 手动触发状态转换
@@ -227,7 +206,7 @@ int main(int argc, char **argv)
  *   Unconfigured ──configure──► Inactive ──activate──► Active
  *        ▲                        │  ▲                    │
  *        │                        │  │                    │
- *        └────cleanup─────────────┘  └───deactivate──────┘
+ *        └────cleanup─────────────┘  └───deactivate───────┘
  *
  *   任何状态 ──shutdown──► Finalized
  * ══════════════════════════════════════════════════════════
