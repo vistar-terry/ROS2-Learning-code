@@ -61,7 +61,7 @@ public:
     //   - 创建发布器/订阅器（但不激活）
     //   - 分配缓冲区
     // ================================================================
-    CallbackReturn on_configure(const rclcpp_lifecycle::State & /*previous_state*/) override
+    CallbackReturn on_configure(const rclcpp_lifecycle::State & previous_state) override
     {
         RCLCPP_INFO(this->get_logger(), "━━━ on_configure ━━━");
         RCLCPP_INFO(this->get_logger(), "  Unconfigured → Inactive");
@@ -88,7 +88,7 @@ public:
     //   - 使能硬件输出
     //   - 启用数据流
     // ================================================================
-    CallbackReturn on_activate(const rclcpp_lifecycle::State &state) override
+    CallbackReturn on_activate(const rclcpp_lifecycle::State &previous_state) override
     {
         RCLCPP_INFO(this->get_logger(), "━━━ on_activate ━━━");
         RCLCPP_INFO(this->get_logger(), "  Inactive → Active");
@@ -96,7 +96,7 @@ public:
 
         // 注意!!!：必须调用父类的 on_activate！
         // 它负责激活所有 LifecyclePublisher
-        rclcpp_lifecycle::LifecycleNode::on_activate(state);
+        rclcpp_lifecycle::LifecycleNode::on_activate(previous_state);
 
         RCLCPP_INFO(this->get_logger(), "  on_activate SUCCESS → Enter Active State");
         return CallbackReturn::SUCCESS;
@@ -112,14 +112,14 @@ public:
     //   - 禁用硬件输出
     //   - 保留内存和连接
     // ================================================================
-    CallbackReturn on_deactivate(const rclcpp_lifecycle::State &state) override
+    CallbackReturn on_deactivate(const rclcpp_lifecycle::State &previous_state) override
     {
         RCLCPP_INFO(this->get_logger(), "━━━ on_deactivate ━━━");
         RCLCPP_INFO(this->get_logger(), "  Active → Inactive");
         RCLCPP_INFO(this->get_logger(), "  Perform here: deactivate publisher, stop timer, disable output");
 
         // 注意!!!：必须调用父类的 on_deactivate！
-        rclcpp_lifecycle::LifecycleNode::on_deactivate(state);
+        rclcpp_lifecycle::LifecycleNode::on_deactivate(previous_state);
 
         RCLCPP_INFO(this->get_logger(), "  on_deactivate SUCCESS → Enter Inactive State");
         return CallbackReturn::SUCCESS;
@@ -135,7 +135,7 @@ public:
     //   - 重置内部状态
     //   - 销毁发布器/订阅器
     // ================================================================
-    CallbackReturn on_cleanup(const rclcpp_lifecycle::State & /*previous_state*/) override
+    CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state) override
     {
         RCLCPP_INFO(this->get_logger(), "━━━ on_cleanup ━━━");
         RCLCPP_INFO(this->get_logger(), "  Inactive → Unconfigured");
