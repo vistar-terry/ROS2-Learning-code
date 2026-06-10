@@ -49,13 +49,13 @@ public:
                 if (pub_count_ % 200 == 0)
                 {
                     RCLCPP_INFO(this->get_logger(),
-                                "[实时传感器] 已发布%d帧 IMU, 线程=%zu",
+                                "[Realtime sensor] published %d IMU frames, thread=%zu",
                                 pub_count_, get_thread_id());
                 }
             });
 
         RCLCPP_INFO(this->get_logger(),
-                    "[实时传感器节点] 启动 (100Hz, 独立执行器)");
+                    "[Realtime sensor node] started (100Hz, independent executor)");
     }
 
 private:
@@ -98,15 +98,15 @@ public:
                 // 每50帧做一次耗时处理
                 if (process_count_ % 50 == 0)
                 {
-                    RCLCPP_INFO(this->get_logger(), "[数据处理] 第%d帧, 开始耗时计算...", process_count_);
+                    RCLCPP_INFO(this->get_logger(), "[Data processing] frame #%d, start heavy computation...", process_count_);
 
                     std::this_thread::sleep_for(200ms); // 模拟耗时
-                    RCLCPP_INFO(this->get_logger(), "[数据处理] msg 线性加速度 x: %lf, y: %lf, z: %lf", 
-                                  msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z);
-                    RCLCPP_INFO(this->get_logger(), "[数据处理] msg 角速度 x: %lf, y: %lf, z: %lf", 
-                                  msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z);
+                    RCLCPP_INFO(this->get_logger(), "[Data processing] msg linear acceleration x: %lf, y: %lf, z: %lf",
+                                msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z);
+                    RCLCPP_INFO(this->get_logger(), "[Data processing] msg angular velocity x: %lf, y: %lf, z: %lf",
+                                msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z);
 
-                    RCLCPP_INFO(this->get_logger(), "[数据处理] 耗时计算完成");
+                    RCLCPP_INFO(this->get_logger(), "[Data processing] heavy computation completed");
                 }
             },
             opts);
@@ -116,11 +116,11 @@ public:
             2s,
             [this]()
             {
-                RCLCPP_INFO(this->get_logger(), "[数据处理] 已处理%d帧 IMU", process_count_);
+                RCLCPP_INFO(this->get_logger(), "[Data processing] processed %d IMU frames", process_count_);
             },
             timer_group_);
 
-        RCLCPP_INFO(this->get_logger(), "[数据处理节点] 启动 (独立执行器)");
+        RCLCPP_INFO(this->get_logger(), "[Data processing node] started (independent executor)");
     }
 
 private:
@@ -147,12 +147,12 @@ public:
             {
                 check_count_++;
                 RCLCPP_INFO(this->get_logger(),
-                            "[监控节点] 系统检查 #%d, 线程=%zu",
+                            "[Monitor node] system check #%d, thread=%zu",
                             check_count_, get_thread_id());
             });
 
         RCLCPP_INFO(this->get_logger(),
-                    "[监控节点] 启动 (0.33Hz, 独立执行器)");
+                    "[Monitor node] started (0.33Hz, independent executor)");
     }
 
 private:
@@ -169,7 +169,7 @@ private:
 
 int main(int argc, char **argv)
 {
-    rclcpp::init(argc, argv);
+    rclcpp::init(argc, argv); // 初始化 ROS2
 
     // ================================================================
     // 多执行器架构
@@ -200,51 +200,51 @@ int main(int argc, char **argv)
     auto process_node = std::make_shared<DataProcessingNode>();
     auto monitor_node = std::make_shared<MonitorNode>();
 
-    // 创建三个独立的执行器
+    // 创建三个独立的执行器（使用 shared_ptr 以便在线程间共享）
     auto sensor_executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
     auto process_executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>(
-        rclcpp::ExecutorOptions(), 2);
+        rclcpp::ExecutorOptions(), 2); // 数据处理用多线程，订阅和定时器不互相阻塞
     auto monitor_executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
 
-    sensor_executor->add_node(sensor_node);
-    process_executor->add_node(process_node);
-    monitor_executor->add_node(monitor_node);
+    sensor_executor->add_node(sensor_node);   // 传感器独享执行器，保证 100Hz 稳定
+    process_executor->add_node(process_node); // 处理独享执行器，耗时计算不影响其他
+    monitor_executor->add_node(monitor_node); // 监控独享执行器
 
     RCLCPP_INFO(rclcpp::get_logger("main"),
-                "=== 多执行器架构已启动 ===");
+                "=== Multi-executor architecture started ===");
     RCLCPP_INFO(rclcpp::get_logger("main"),
-                "  Executor 1 (SingleThreaded): 实时传感器 100Hz");
+                "  Executor 1 (SingleThreaded): realtime sensor 100Hz");
     RCLCPP_INFO(rclcpp::get_logger("main"),
-                "  Executor 2 (MultiThreaded):  数据处理（2线程）");
+                "  Executor 2 (MultiThreaded):  data processing (2 threads)");
     RCLCPP_INFO(rclcpp::get_logger("main"),
-                "  Executor 3 (SingleThreaded): 监控 (0.33Hz)");
+                "  Executor 3 (SingleThreaded): monitor (0.33Hz)");
 
     // ================================================================
     // 启动三个线程，分别驱动三个执行器
     // ================================================================
-    std::vector<std::thread> threads;
+    std::vector<std::thread> threads; // 存放各执行器线程
 
     threads.emplace_back([sensor_executor]()
-                         { sensor_executor->spin(); });
+                         { sensor_executor->spin(); }); // 线程1：驱动传感器执行器
 
     threads.emplace_back([process_executor]()
-                         { process_executor->spin(); });
+                         { process_executor->spin(); }); // 线程2：驱动数据处理执行器
 
     threads.emplace_back([monitor_executor]()
-                         { monitor_executor->spin(); });
+                         { monitor_executor->spin(); }); // 线程3：驱动监控执行器
 
     RCLCPP_INFO(rclcpp::get_logger("main"),
-                "三个执行器线程已启动，观察传感器100Hz不被阻塞");
+                "Three executor threads started, observe sensor 100Hz is not blocked");
 
     // 等待所有线程结束
     for (auto &t : threads)
     {
-        if (t.joinable())
+        if (t.joinable()) // 检查线程是否可 join
         {
-            t.join();
+            t.join(); // 阻塞等待线程结束
         }
     }
 
-    rclcpp::shutdown();
+    rclcpp::shutdown(); // 清理 ROS2 资源
     return 0;
 }

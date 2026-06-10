@@ -41,28 +41,31 @@
 using namespace std::chrono_literals;
 
 // 全局原子变量，用于信号处理中的优雅关闭
-static std::atomic<bool> g_shutdown_requested{false};
+static std::atomic<bool> g_shutdown_requested{false}; // 原子变量，线程安全
 
-void signal_handler(int signum) {
-    (void)signum;
-    g_shutdown_requested = true;
+void signal_handler(int signum)
+{
+    (void)signum;                // 忽略未使用参数警告
+    g_shutdown_requested = true; // 设置关闭标志
 }
 
 // ================================================================
 // 机械臂控制节点 —— 每个臂一个独立实例
 // ================================================================
-class ArmControlNode : public rclcpp::Node {
+class ArmControlNode : public rclcpp::Node
+{
 public:
-    explicit ArmControlNode(const std::string& arm_name)
+    explicit ArmControlNode(const std::string &arm_name)
         : Node(arm_name + "_arm_controller"),
           arm_name_(arm_name), control_count_(0), state_count_(0)
     {
         // 命令订阅
         cmd_sub_ = this->create_subscription<std_msgs::msg::String>(
             "/" + arm_name + "_arm_cmd", 10,
-            [this](const std_msgs::msg::String::SharedPtr msg) {
+            [this](const std_msgs::msg::String::SharedPtr msg)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[%s臂] 收到命令: '%s'", arm_name_.c_str(), msg->data.c_str());
+                            "[%s arm] received command: '%s'", arm_name_.c_str(), msg->data.c_str());
             });
 
         // 关节状态发布
@@ -72,7 +75,8 @@ public:
         // 100Hz 控制循环
         control_timer_ = this->create_wall_timer(
             10ms,
-            [this]() {
+            [this]()
+            {
                 control_count_++;
                 // 模拟控制计算
                 auto msg = sensor_msgs::msg::JointState();
@@ -81,31 +85,35 @@ public:
                 msg.position = {0.0, 0.0, 0.0};
                 joint_pub_->publish(msg);
 
-                if (control_count_ % 200 == 0) {
+                if (control_count_ % 200 == 0)
+                {
                     RCLCPP_INFO(this->get_logger(),
-                        "[%s臂控制 100Hz] #%d, 线程=%zu",
-                        arm_name_.c_str(), control_count_, get_thread_id());
+                                "[%s arm control 100Hz] #%d, thread=%zu",
+                                arm_name_.c_str(), control_count_, get_thread_id());
                 }
             });
 
         // 10Hz 状态报告
         state_timer_ = this->create_wall_timer(
             100ms,
-            [this]() {
+            [this]()
+            {
                 state_count_++;
-                if (state_count_ % 10 == 0) {
+                if (state_count_ % 10 == 0)
+                {
                     RCLCPP_INFO(this->get_logger(),
-                        "[%s臂状态 10Hz] 控制=%d, 线程=%zu",
-                        arm_name_.c_str(), control_count_, get_thread_id());
+                                "[%s arm status 10Hz] control=%d, thread=%zu",
+                                arm_name_.c_str(), control_count_, get_thread_id());
                 }
             });
 
         RCLCPP_INFO(this->get_logger(),
-            "[%s臂控制器] 启动 (100Hz控制 + 10Hz状态)", arm_name_.c_str());
+                    "[%s arm controller] started (100Hz control + 10Hz status)", arm_name_.c_str());
     }
 
 private:
-    std::size_t get_thread_id() {
+    std::size_t get_thread_id()
+    {
         std::ostringstream oss;
         oss << std::this_thread::get_id();
         return std::hash<std::string>{}(oss.str()) % 10000;
@@ -124,7 +132,8 @@ private:
 // ================================================================
 // 底盘控制节点 —— 独立执行器
 // ================================================================
-class BaseControlNode : public rclcpp::Node {
+class BaseControlNode : public rclcpp::Node
+{
 public:
     BaseControlNode()
         : Node("base_controller"), control_count_(0)
@@ -132,37 +141,42 @@ public:
         // 速度命令订阅
         cmd_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
             "/base_cmd", 10,
-            [this](const geometry_msgs::msg::Twist::SharedPtr msg) {
+            [this](const geometry_msgs::msg::Twist::SharedPtr msg)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[底盘] 速度命令: vx=%.2f, omega=%.2f",
-                    msg->linear.x, msg->angular.z);
+                            "[Base] velocity command: vx=%.2f, omega=%.2f",
+                            msg->linear.x, msg->angular.z);
             });
 
         // 50Hz 控制循环
         control_timer_ = this->create_wall_timer(
             20ms,
-            [this]() {
+            [this]()
+            {
                 control_count_++;
-                if (control_count_ % 100 == 0) {
+                if (control_count_ % 100 == 0)
+                {
                     RCLCPP_INFO(this->get_logger(),
-                        "[底盘控制 50Hz] #%d, 线程=%zu",
-                        control_count_, get_thread_id());
+                                "[Base control 50Hz] #%d, thread=%zu",
+                                control_count_, get_thread_id());
                 }
             });
 
         // 20Hz 里程计发布
         odom_timer_ = this->create_wall_timer(
             50ms,
-            [this]() {
+            [this]()
+            {
                 // 模拟里程计发布
             });
 
         RCLCPP_INFO(this->get_logger(),
-            "[底盘控制器] 启动 (50Hz控制 + 20Hz里程)");
+                    "[Base controller] started (50Hz control + 20Hz odometry)");
     }
 
 private:
-    std::size_t get_thread_id() {
+    std::size_t get_thread_id()
+    {
         std::ostringstream oss;
         oss << std::this_thread::get_id();
         return std::hash<std::string>{}(oss.str()) % 10000;
@@ -178,7 +192,8 @@ private:
 // ================================================================
 // 协调器节点 —— 通过 topic 协调各子系统
 // ================================================================
-class CoordinatorNode : public rclcpp::Node {
+class CoordinatorNode : public rclcpp::Node
+{
 public:
     CoordinatorNode()
         : Node("coordinator"), coordination_count_(0)
@@ -198,10 +213,11 @@ public:
         // 1Hz 协调循环
         coord_timer_ = this->create_wall_timer(
             1s,
-            [this]() {
+            [this]()
+            {
                 coordination_count_++;
                 RCLCPP_INFO(this->get_logger(),
-                    "[协调器] 发送协调指令 #%d", coordination_count_);
+                            "[Coordinator] sending coordination command #%d", coordination_count_);
 
                 // 左臂命令
                 auto left_msg = std_msgs::msg::String();
@@ -220,7 +236,7 @@ public:
             });
 
         RCLCPP_INFO(this->get_logger(),
-            "[协调器] 启动 (1Hz 协调循环)");
+                    "[Coordinator] started (1Hz coordination loop)");
     }
 
 private:
@@ -232,11 +248,12 @@ private:
     rclcpp::TimerBase::SharedPtr coord_timer_;
 };
 
-int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv); // 初始化 ROS2
 
     // 注册信号处理（优雅关闭）
-    std::signal(SIGINT, signal_handler);
+    std::signal(SIGINT, signal_handler); // 捕获 Ctrl+C 信号
 
     // ================================================================
     // 创建4个节点
@@ -258,65 +275,71 @@ int main(int argc, char** argv) {
     //   - 不需要动态添加/移除节点
     //   - 零分配 → 最低抖动
     // ================================================================
-    auto left_executor = std::make_shared<rclcpp::executors::StaticSingleThreadedExecutor>();
-    auto right_executor = std::make_shared<rclcpp::executors::StaticSingleThreadedExecutor>();
-    auto base_executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+    auto left_executor = std::make_shared<rclcpp::executors::StaticSingleThreadedExecutor>();  // 左臂：零分配确定性控制
+    auto right_executor = std::make_shared<rclcpp::executors::StaticSingleThreadedExecutor>(); // 右臂：零分配确定性控制
+    auto base_executor = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();        // 底盘+协调器：非关键实时
 
-    left_executor->add_node(left_arm);
-    right_executor->add_node(right_arm);
-    base_executor->add_node(base);
-    base_executor->add_node(coordinator);
+    left_executor->add_node(left_arm);    // 左臂节点 → 独立执行器
+    right_executor->add_node(right_arm);  // 右臂节点 → 独立执行器
+    base_executor->add_node(base);        // 底盘节点
+    base_executor->add_node(coordinator); // 协调器与底盘共享执行器
 
     RCLCPP_INFO(rclcpp::get_logger("main"),
-        "=== 多臂协调机器人系统已启动 ===");
+                "=== Multi-arm coordination robot system started ===");
     RCLCPP_INFO(rclcpp::get_logger("main"),
-        "  执行器1 (StaticSingleThreaded): 左臂 100Hz");
+                "  Executor 1 (StaticSingleThreaded): left arm 100Hz");
     RCLCPP_INFO(rclcpp::get_logger("main"),
-        "  执行器2 (StaticSingleThreaded): 右臂 100Hz");
+                "  Executor 2 (StaticSingleThreaded): right arm 100Hz");
     RCLCPP_INFO(rclcpp::get_logger("main"),
-        "  执行器3 (SingleThreaded):       底盘50Hz + 协调器1Hz");
+                "  Executor 3 (SingleThreaded):       base 50Hz + coordinator 1Hz");
     RCLCPP_INFO(rclcpp::get_logger("main"),
-        "  三者互不影响，独立运行");
+                "  All independent, no mutual interference");
 
     // ================================================================
     // 启动三个线程驱动三个执行器
     // ================================================================
-    std::vector<std::thread> threads;
+    std::vector<std::thread> threads; // 存放各执行器线程
 
-    threads.emplace_back([left_executor]() {
-        left_executor->spin();
-    });
+    threads.emplace_back([left_executor]()
+                         {
+                             left_executor->spin(); // 线程1：驱动左臂执行器
+                         });
 
-    threads.emplace_back([right_executor]() {
-        right_executor->spin();
-    });
+    threads.emplace_back([right_executor]()
+                         {
+                             right_executor->spin(); // 线程2：驱动右臂执行器
+                         });
 
-    threads.emplace_back([base_executor]() {
-        base_executor->spin();
-    });
+    threads.emplace_back([base_executor]()
+                         {
+                             base_executor->spin(); // 线程3：驱动底盘+协调器执行器
+                         });
 
     // ================================================================
     // 主线程监控 + 优雅关闭
     // ================================================================
-    while (rclcpp::ok() && !g_shutdown_requested) {
-        std::this_thread::sleep_for(500ms);
+    while (rclcpp::ok() && !g_shutdown_requested)
+    {                                       // 主线程轮询检查关闭标志
+        std::this_thread::sleep_for(500ms); // 每500ms检查一次
     }
 
-    RCLCPP_INFO(rclcpp::get_logger("main"), "正在优雅关闭...");
+    RCLCPP_INFO(rclcpp::get_logger("main"), "Graceful shutdown in progress...");
 
-    // 取消所有执行器
+    // 取消所有执行器（使 spin() 退出阻塞）
     left_executor->cancel();
     right_executor->cancel();
     base_executor->cancel();
 
     // 等待所有线程结束
-    for (auto& t : threads) {
-        if (t.joinable()) {
-            t.join();
+    for (auto &t : threads)
+    {
+        if (t.joinable())
+        {
+            t.join(); // 阻塞等待线程安全退出
         }
     }
 
-    rclcpp::shutdown();
-    RCLCPP_INFO(rclcpp::get_logger("main"), "系统已安全关闭");
+    rclcpp::shutdown(); // 清理 ROS2 资源
+    RCLCPP_INFO(rclcpp::get_logger("main"), "System safely shut down");
     return 0;
 }

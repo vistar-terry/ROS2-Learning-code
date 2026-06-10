@@ -42,7 +42,8 @@
 
 using namespace std::chrono_literals;
 
-class RobotNavExecutorNode : public rclcpp::Node {
+class RobotNavExecutorNode : public rclcpp::Node
+{
 public:
     RobotNavExecutorNode()
         : Node("robot_nav_executor"),
@@ -81,16 +82,18 @@ public:
             "/cmd_vel", 10);
 
         control_timer_ = this->create_wall_timer(
-            20ms,  // 50Hz
-            [this]() {
-                std::lock_guard<std::mutex> lock(data_mutex_);
+            20ms, // 50Hz
+            [this]()
+            {
+                std::lock_guard<std::mutex> lock(data_mutex_); // 加锁保护共享数据
 
-                // 简单速度控制：趋近目标速度
-                double alpha = 0.1;
-                current_speed_ += alpha * (target_speed_ - current_speed_);
+                // 简单速度控制：趋近目标速度（一阶低通滤波）
+                double alpha = 0.1;                                         // 滤波系数，越小越平滑
+                current_speed_ += alpha * (target_speed_ - current_speed_); // 指数平滑
 
                 // 障碍物检测 → 急停
-                if (obstacle_detected_) {
+                if (obstacle_detected_)
+                {
                     current_speed_ = 0.0;
                 }
 
@@ -100,14 +103,16 @@ public:
                 cmd_pub_->publish(cmd);
 
                 cmd_count_++;
-                if (cmd_count_ % 100 == 0) {
+                if (cmd_count_ % 100 == 0)
+                {
                     // 注意：std::atomic 不可拷贝，必须用 .load() 先转为普通类型
                     int count = cmd_count_.load();
                     RCLCPP_INFO(this->get_logger(),
-                        "[速度控制 50Hz] #%d, 速度=%.2f m/s, 目标=%.2f, 线程=%zu",
-                        count, current_speed_, target_speed_, get_thread_id());
+                                "[Velocity control 50Hz] #%d, speed=%.2f m/s, target=%.2f, thread=%zu",
+                                count, current_speed_, target_speed_, get_thread_id());
                 }
-            }, control_group_);
+            },
+            control_group_);
 
         // ================================================================
         // 2. IMU 数据订阅 100Hz —— 绑定到 imu_group_
@@ -117,15 +122,18 @@ public:
 
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(
             "/imu/data", rclcpp::SensorDataQoS(),
-            [this](const sensor_msgs::msg::Imu::SharedPtr /*msg*/) {
+            [this](const sensor_msgs::msg::Imu::SharedPtr /*msg*/)
+            {
                 imu_count_++;
                 // IMU 数据处理（轻量）
-                if (imu_count_ % 100 == 0) {
+                if (imu_count_ % 100 == 0)
+                {
                     int count = imu_count_.load();
                     RCLCPP_DEBUG(this->get_logger(),
-                        "[IMU 100Hz] #%d", count);
+                                 "[IMU 100Hz] #%d", count);
                 }
-            }, imu_opts);
+            },
+            imu_opts);
 
         // ================================================================
         // 3. 里程计订阅 50Hz —— 绑定到 odom_group_
@@ -135,16 +143,19 @@ public:
 
         odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
             "/odom", 10,
-            [this](const nav_msgs::msg::Odometry::SharedPtr /*msg*/) {
+            [this](const nav_msgs::msg::Odometry::SharedPtr /*msg*/)
+            {
                 odom_count_++;
                 std::lock_guard<std::mutex> lock(data_mutex_);
                 // 更新机器人位置（轻量操作）
-                if (odom_count_ % 50 == 0) {
+                if (odom_count_ % 50 == 0)
+                {
                     int count = odom_count_.load();
                     RCLCPP_DEBUG(this->get_logger(),
-                        "[里程计 50Hz] #%d", count);
+                                 "[Odometry 50Hz] #%d", count);
                 }
-            }, odom_opts);
+            },
+            odom_opts);
 
         // ================================================================
         // 4. 激光扫描 10Hz —— 绑定到 scan_group_
@@ -154,27 +165,32 @@ public:
 
         scan_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
             "/scan", rclcpp::SensorDataQoS(),
-            [this](const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+            [this](const sensor_msgs::msg::LaserScan::SharedPtr msg)
+            {
                 scan_count_++;
                 // 障碍物检测（轻量）
-                float min_range = std::numeric_limits<float>::infinity();
-                for (const auto& r : msg->ranges) {
-                    if (r < min_range && r > msg->range_min) {
+                float min_range = std::numeric_limits<float>::infinity(); // 初始化为无穷大
+                for (const auto &r : msg->ranges)
+                {
+                    if (r < min_range && r > msg->range_min)
+                    { // 排除无效测量值
                         min_range = r;
                     }
                 }
                 {
-                    std::lock_guard<std::mutex> lock(data_mutex_);
-                    obstacle_detected_ = (min_range < 0.5);
+                    std::lock_guard<std::mutex> lock(data_mutex_); // 加锁写共享数据
+                    obstacle_detected_ = (min_range < 0.5);        // 0.5m 内有障碍物则标记
                 }
-                if (scan_count_ % 10 == 0) {
+                if (scan_count_ % 10 == 0)
+                {
                     int count = scan_count_.load();
                     RCLCPP_INFO(this->get_logger(),
-                        "[激光 10Hz] #%d, 最近=%.2fm, 障碍=%s, 线程=%zu",
-                        count, min_range,
-                        obstacle_detected_ ? "是" : "否", get_thread_id());
+                                "[Laser 10Hz] #%d, min_range=%.2fm, obstacle=%s, thread=%zu",
+                                count, min_range,
+                                obstacle_detected_ ? "yes" : "no", get_thread_id());
                 }
-            }, scan_opts);
+            },
+            scan_opts);
 
         // ================================================================
         // 5. 路径规划 0.5Hz —— 绑定到 planning_group_（耗时操作）
@@ -184,12 +200,13 @@ public:
             "/planned_path", 10);
 
         planning_timer_ = this->create_wall_timer(
-            2s,  // 0.5Hz
-            [this]() {
+            2s, // 0.5Hz
+            [this]()
+            {
                 plan_count_++;
                 int pcount = plan_count_.load();
                 RCLCPP_INFO(this->get_logger(),
-                    "[路径规划 0.5Hz] #%d 开始规划...", pcount);
+                            "[Path planning 0.5Hz] #%d start planning...", pcount);
 
                 // 模拟耗时规划（1秒）
                 std::this_thread::sleep_for(1000ms);
@@ -207,9 +224,10 @@ public:
                 }
 
                 RCLCPP_INFO(this->get_logger(),
-                    "[路径规划 0.5Hz] #%d 完成, 目标速度=%.2f, 线程=%zu",
-                    pcount, target_speed_, get_thread_id());
-            }, planning_group_);
+                            "[Path planning 0.5Hz] #%d completed, target_speed=%.2f, thread=%zu",
+                            pcount, target_speed_, get_thread_id());
+            },
+            planning_group_);
 
         // ================================================================
         // 6. 仿真传感器发布器 —— 模拟传感器输入
@@ -221,37 +239,38 @@ public:
         sim_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/odom", 10);
 
-        sim_imu_timer_ = this->create_wall_timer(10ms, [this]() {
+        sim_imu_timer_ = this->create_wall_timer(10ms, [this]()
+                                                 {
             auto msg = sensor_msgs::msg::Imu();
             msg.header.stamp = this->now();
-            sim_imu_pub_->publish(msg);
-        });
+            sim_imu_pub_->publish(msg); });
 
-        sim_scan_timer_ = this->create_wall_timer(100ms, [this]() {
+        sim_scan_timer_ = this->create_wall_timer(100ms, [this]()
+                                                  {
             auto msg = sensor_msgs::msg::LaserScan();
             msg.header.stamp = this->now();
             msg.range_min = 0.1f;
             msg.range_max = 10.0f;
             msg.ranges.resize(360, 2.0f);  // 模拟2m外无障碍
-            sim_scan_pub_->publish(msg);
-        });
+            sim_scan_pub_->publish(msg); });
 
-        sim_odom_timer_ = this->create_wall_timer(20ms, [this]() {
+        sim_odom_timer_ = this->create_wall_timer(20ms, [this]()
+                                                  {
             auto msg = nav_msgs::msg::Odometry();
             msg.header.stamp = this->now();
-            sim_odom_pub_->publish(msg);
-        });
+            sim_odom_pub_->publish(msg); });
 
         RCLCPP_INFO(this->get_logger(),
-            "=== 机器人导航栈执行器节点已启动 ===");
+                    "=== Robot navigation stack executor node started ===");
         RCLCPP_INFO(this->get_logger(),
-            "  控制组(50Hz) | IMU组(100Hz) | 里程计组(50Hz) | 激光组(10Hz) | 规划组(0.5Hz)");
+                    "  Control(50Hz) | IMU(100Hz) | Odom(50Hz) | Laser(10Hz) | Planning(0.5Hz)");
         RCLCPP_INFO(this->get_logger(),
-            "  路径规划1秒耗时不影响速度控制50Hz输出");
+                    "  Path planning takes 1s but does not affect 50Hz velocity control");
     }
 
 private:
-    std::size_t get_thread_id() {
+    std::size_t get_thread_id()
+    {
         std::ostringstream oss;
         oss << std::this_thread::get_id();
         return std::hash<std::string>{}(oss.str()) % 10000;
@@ -297,10 +316,11 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;
 };
 
-int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv); // 初始化 ROS2
 
-    auto node = std::make_shared<RobotNavExecutorNode>();
+    auto node = std::make_shared<RobotNavExecutorNode>(); // 创建导航栈节点
 
     // ================================================================
     // MultiThreadedExecutor + 5个回调组
@@ -308,14 +328,14 @@ int main(int argc, char** argv) {
     //    确保最高优先级的控制回调有足够线程可用
     // ================================================================
     rclcpp::executors::MultiThreadedExecutor executor(
-        rclcpp::ExecutorOptions(), 5);
+        rclcpp::ExecutorOptions(), 5); // 5个线程，对应5个回调组
     executor.add_node(node);
 
     RCLCPP_INFO(node->get_logger(),
-        "使用 MultiThreadedExecutor (5线程) 驱动导航栈");
+                "Using MultiThreadedExecutor (5 threads) for navigation stack");
 
-    executor.spin();
+    executor.spin(); // 阻塞执行，5个回调组并发运行
 
-    rclcpp::shutdown();
+    rclcpp::shutdown(); // 清理 ROS2 资源
     return 0;
 }

@@ -16,7 +16,8 @@
 
 using namespace std::chrono_literals;
 
-class SingleThreadedBasicNode : public rclcpp::Node {
+class SingleThreadedBasicNode : public rclcpp::Node
+{
 public:
     SingleThreadedBasicNode()
         : Node("single_threaded_basic"), count_(0)
@@ -26,22 +27,24 @@ public:
         //    在 SingleThreadedExecutor 中，回调严格串行执行
         // ================================================================
         fast_timer_ = this->create_wall_timer(
-            100ms,  // 10Hz
-            [this]() {
+            100ms, // 10Hz
+            [this]()
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[快定时器 10Hz] 计数=%d, 线程=%zu",
-                    ++count_, get_thread_id());
+                            "[FastTimer 10Hz] count=%d, thread=%zu",
+                            ++count_, get_thread_id());
             });
 
         slow_timer_ = this->create_wall_timer(
-            500ms,  // 2Hz
-            [this]() {
+            500ms, // 2Hz
+            [this]()
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[慢定时器 2Hz] ---- 开始模拟耗时操作 ----");
+                            "[SlowTimer 2Hz] ---- start simulated heavy task ----");
                 // 模拟 200ms 的处理延迟
                 std::this_thread::sleep_for(200ms);
                 RCLCPP_INFO(this->get_logger(),
-                    "[慢定时器 2Hz] ---- 耗时操作完成 ----");
+                            "[SlowTimer 2Hz] ---- heavy task completed ----");
             });
 
         // ================================================================
@@ -51,20 +54,23 @@ public:
         // ================================================================
         sub_ = this->create_subscription<std_msgs::msg::String>(
             "/test_topic", 10,
-            [this](const std_msgs::msg::String::SharedPtr msg) {
+            [this](const std_msgs::msg::String::SharedPtr msg)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[订阅] 收到: '%s', 线程=%zu",
-                    msg->data.c_str(), get_thread_id());
+                            "[Subscription] received: '%s', thread=%zu",
+                            msg->data.c_str(), get_thread_id());
             });
 
-        RCLCPP_INFO(this->get_logger(), "=== 单线程执行器基础节点已启动 ===");
-        RCLCPP_INFO(this->get_logger(), "观察: 慢定时器执行时，快定时器和订阅回调会被阻塞");
-        RCLCPP_INFO(this->get_logger(), "所有回调在同一线程中串行执行");
+        RCLCPP_INFO(this->get_logger(), "=== SingleThreadedExecutor basic node started ===");
+        RCLCPP_INFO(this->get_logger(), "Observe: fast timer and subscription callbacks are blocked while slow timer runs");
+        RCLCPP_INFO(this->get_logger(), "All callbacks execute serially in the same thread");
     }
 
 private:
     // 获取当前线程 ID（简化显示）
-    std::size_t get_thread_id() {
+    // 将原生线程 ID 转为字符串后哈希取模，方便观察对比
+    std::size_t get_thread_id()
+    {
         std::ostringstream oss;
         oss << std::this_thread::get_id();
         return std::hash<std::string>{}(oss.str()) % 10000;
@@ -76,10 +82,11 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_;
 };
 
-int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv); // 初始化 ROS2 通信层
 
-    auto node = std::make_shared<SingleThreadedBasicNode>();
+    auto node = std::make_shared<SingleThreadedBasicNode>(); // 创建节点智能指针
 
     // ================================================================
     // 方式一：rclcpp::spin() —— 最简单的方式
@@ -92,15 +99,15 @@ int main(int argc, char** argv) {
     // 方式二：手动创建 SingleThreadedExecutor
     //    更灵活，可以精确控制执行流程
     // ================================================================
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_node(node);
+    rclcpp::executors::SingleThreadedExecutor executor; // 手动创建单线程执行器
+    executor.add_node(node);                            // 将节点注册到执行器
 
-    RCLCPP_INFO(node->get_logger(), "使用 SingleThreadedExecutor 手动创建");
-    RCLCPP_INFO(node->get_logger(), "调用 executor.spin() 开始执行回调...");
+    RCLCPP_INFO(node->get_logger(), "Using manually created SingleThreadedExecutor");
+    RCLCPP_INFO(node->get_logger(), "Calling executor.spin() to start callback execution...");
 
     // spin() 会阻塞当前线程，持续从等待集中取出就绪回调并执行
     executor.spin();
 
-    rclcpp::shutdown();
+    rclcpp::shutdown(); // 清理 ROS2 资源
     return 0;
 }

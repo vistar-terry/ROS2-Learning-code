@@ -18,7 +18,8 @@
 
 using namespace std::chrono_literals;
 
-class SpinMethodsNode : public rclcpp::Node {
+class SpinMethodsNode : public rclcpp::Node
+{
 public:
     SpinMethodsNode()
         : Node("spin_methods"), mode_("unknown"),
@@ -29,25 +30,28 @@ public:
         // ================================================================
         timer_ = this->create_wall_timer(
             100ms,
-            [this]() {
+            [this]()
+            {
                 callback_count_++;
                 RCLCPP_INFO(this->get_logger(),
-                    "[定时回调] 第%d次", callback_count_);
+                            "[Timer callback] #%d", callback_count_);
             });
 
         sub_ = this->create_subscription<std_msgs::msg::String>(
             "/test_topic", 10,
-            [this](const std_msgs::msg::String::SharedPtr msg) {
+            [this](const std_msgs::msg::String::SharedPtr msg)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[订阅回调] 收到: '%s'", msg->data.c_str());
+                            "[Subscription callback] received: '%s'", msg->data.c_str());
             });
 
-        RCLCPP_INFO(this->get_logger(), "=== spin 方法演示节点已启动 ===");
+        RCLCPP_INFO(this->get_logger(), "=== Spin methods demo node started ===");
     }
 
-    void set_mode(const std::string& mode) {
+    void set_mode(const std::string &mode)
+    {
         mode_ = mode;
-        RCLCPP_INFO(this->get_logger(), "运行模式: %s", mode_.c_str());
+        RCLCPP_INFO(this->get_logger(), "Running mode: %s", mode_.c_str());
     }
 
     int get_callback_count() const { return callback_count_; }
@@ -63,146 +67,160 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_;
 };
 
-int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv); // 初始化 ROS2
 
-    int mode = 1;  // 默认 spin()
-    if (argc > 1) {
-        mode = std::atoi(argv[1]);
+    int mode = 1; // 默认 spin()
+    if (argc > 1)
+    {
+        mode = std::atoi(argv[1]); // 从命令行参数读取模式
     }
 
-    auto node = std::make_shared<SpinMethodsNode>();
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_node(node);
+    auto node = std::make_shared<SpinMethodsNode>();    // 创建节点
+    rclcpp::executors::SingleThreadedExecutor executor; // 所有模式共用一个执行器
+    executor.add_node(node);                            // 将节点注册到执行器
 
-    switch (mode) {
-        // ================================================================
-        // 模式一：spin() —— 阻塞式无限循环
-        //
-        //   while(rclcpp::ok()) {
-        //       wait_for_ready_callbacks();  // 等待任一回调就绪
-        //       execute_callback();           // 执行就绪的回调
-        //   }
-        //
-        // 特点：最简单、最常用、完全由执行器控制
-        // 适用：大多数 ROS2 节点
-        // ================================================================
-        case 1: {
-            node->set_mode("spin() - 阻塞式无限循环");
-            RCLCPP_INFO(node->get_logger(),
-                "spin() 会阻塞当前线程，持续执行回调直到 rclcpp::shutdown()");
-            executor.spin();
-            break;
-        }
-
-        // ================================================================
-        // 模式二：spin_once() —— 执行一轮
-        //
-        //   wait_for_ready_callbacks(timeout);  // 等待（有超时）
-        //   execute_next_callback();              // 执行一个就绪回调
-        //
-        // 特点：每次调用只执行一个回调
-        // 适用：需要在回调之间插入自定义逻辑
-        // 注意：需要自己写循环！否则只执行一次
-        // ================================================================
-        case 2: {
-            node->set_mode("spin_once() - 单步执行");
-            RCLCPP_INFO(node->get_logger(),
-                "spin_once() 每次只执行一个回调，需要放在循环中");
-
-            while (rclcpp::ok()) {
-                // spin_once 执行一轮，超时 100ms
-                executor.spin_once(100ms);
-
-                // 可以在这里插入自定义逻辑
-                node->increment_custom_loop();
-                if (node->get_custom_loop_count() % 20 == 0) {
-                    RCLCPP_INFO(node->get_logger(),
-                        "[自定义逻辑] 循环次数=%d, 回调次数=%d",
-                        node->get_custom_loop_count(),
-                        node->get_callback_count());
-                }
-            }
-            break;
-        }
-
-        // ================================================================
-        // 模式三：spin_some() —— 非阻塞执行所有可用回调
-        //
-        //   while(has_ready_callbacks()) {
-        //       execute_next_callback();  // 执行一个就绪回调
-        //       if (exceeded_max_duration()) break;
-        //   }
-        //
-        // 特点：执行所有当前就绪的回调（有最大时长限制）
-        // 适用：与其他事件循环集成（Qt/GTK/OpenCV GUI 等）
-        // ================================================================
-        case 3: {
-            node->set_mode("spin_some() - 非阻塞批量执行");
-            RCLCPP_INFO(node->get_logger(),
-                "spin_some() 执行所有当前就绪的回调，不阻塞等待新回调");
-
-            while (rclcpp::ok()) {
-                // spin_some: 执行所有就绪回调，最多耗时 50ms
-                executor.spin_some(50ms);
-
-                // 模拟 GUI 或其他主循环逻辑
-                node->increment_custom_loop();
-                if (node->get_custom_loop_count() % 20 == 0) {
-                    RCLCPP_INFO(node->get_logger(),
-                        "[主循环] 循环次数=%d, 回调次数=%d",
-                        node->get_custom_loop_count(),
-                        node->get_callback_count());
-                }
-
-                // 防止 CPU 空转 —— 短暂休眠
-                std::this_thread::sleep_for(10ms);
-            }
-            break;
-        }
-
-        // ================================================================
-        // 模式四：自定义执行循环 —— 基于spin_some的优先级调度
-        //
-        //   while(rclcpp::ok()) {
-        //       check_high_priority_callbacks();  // 先检查高优先级
-        //       check_low_priority_callbacks();   // 再检查低优先级
-        //       do_custom_work();                 // 自定义工作
-        //   }
-        //
-        // 适用：需要精确控制回调执行顺序的实时系统
-        // ================================================================
-        case 4: {
-            node->set_mode("自定义循环 - 优先级调度");
-            RCLCPP_INFO(node->get_logger(),
-                "自定义执行循环：在 spin_some 之间插入优先级判断逻辑");
-
-            while (rclcpp::ok()) {
-                // 执行所有就绪回调
-                executor.spin_some(10ms);
-
-                // 自定义逻辑：例如检查系统状态、处理非 ROS 任务
-                node->increment_custom_loop();
-                if (node->get_custom_loop_count() % 50 == 0) {
-                    RCLCPP_INFO(node->get_logger(),
-                        "[优先级调度] 循环=%d, 回调=%d",
-                        node->get_custom_loop_count(),
-                        node->get_callback_count());
-                }
-
-                // 控制循环频率
-                std::this_thread::sleep_for(5ms);
-            }
-            break;
-        }
-
-        default: {
-            RCLCPP_WARN(node->get_logger(), "未知模式 %d，使用默认 spin()", mode);
-            executor.spin();
-            break;
-        }
+    switch (mode)
+    {
+    // ================================================================
+    // 模式一：spin() —— 阻塞式无限循环
+    //
+    //   while(rclcpp::ok()) {
+    //       wait_for_ready_callbacks();  // 等待任一回调就绪
+    //       execute_callback();           // 执行就绪的回调
+    //   }
+    //
+    // 特点：最简单、最常用、完全由执行器控制
+    // 适用：大多数 ROS2 节点
+    // ================================================================
+    case 1:
+    {
+        node->set_mode("spin() - blocking infinite loop");
+        RCLCPP_INFO(node->get_logger(),
+                    "spin() blocks the current thread, executing callbacks until rclcpp::shutdown()");
+        executor.spin();
+        break;
     }
 
-    rclcpp::shutdown();
+    // ================================================================
+    // 模式二：spin_once() —— 执行一轮
+    //
+    //   wait_for_ready_callbacks(timeout);  // 等待（有超时）
+    //   execute_next_callback();              // 执行一个就绪回调
+    //
+    // 特点：每次调用只执行一个回调
+    // 适用：需要在回调之间插入自定义逻辑
+    // 注意：需要自己写循环！否则只执行一次
+    // ================================================================
+    case 2:
+    {
+        node->set_mode("spin_once() - single step execution");
+        RCLCPP_INFO(node->get_logger(),
+                    "spin_once() executes one callback per call, must be placed in a loop");
+
+        while (rclcpp::ok())
+        {
+            // spin_once 执行一轮，超时 100ms
+            executor.spin_once(100ms);
+
+            // 可以在这里插入自定义逻辑
+            node->increment_custom_loop();
+            if (node->get_custom_loop_count() % 20 == 0)
+            {
+                RCLCPP_INFO(node->get_logger(),
+                            "[Custom logic] loop=%d, callbacks=%d",
+                            node->get_custom_loop_count(),
+                            node->get_callback_count());
+            }
+        }
+        break;
+    }
+
+    // ================================================================
+    // 模式三：spin_some() —— 非阻塞执行所有可用回调
+    //
+    //   while(has_ready_callbacks()) {
+    //       execute_next_callback();  // 执行一个就绪回调
+    //       if (exceeded_max_duration()) break;
+    //   }
+    //
+    // 特点：执行所有当前就绪的回调（有最大时长限制）
+    // 适用：与其他事件循环集成（Qt/GTK/OpenCV GUI 等）
+    // ================================================================
+    case 3:
+    {
+        node->set_mode("spin_some() - non-blocking batch execution");
+        RCLCPP_INFO(node->get_logger(),
+                    "spin_some() executes all currently ready callbacks without blocking for new ones");
+
+        while (rclcpp::ok())
+        {
+            // spin_some: 执行所有就绪回调，最多耗时 50ms
+            executor.spin_some(50ms);
+
+            // 模拟 GUI 或其他主循环逻辑
+            node->increment_custom_loop();
+            if (node->get_custom_loop_count() % 20 == 0)
+            {
+                RCLCPP_INFO(node->get_logger(),
+                            "[Main loop] loop=%d, callbacks=%d",
+                            node->get_custom_loop_count(),
+                            node->get_callback_count());
+            }
+
+            // 防止 CPU 空转 —— 短暂休眠
+            std::this_thread::sleep_for(10ms);
+        }
+        break;
+    }
+
+    // ================================================================
+    // 模式四：自定义执行循环 —— 基于spin_some的优先级调度
+    //
+    //   while(rclcpp::ok()) {
+    //       check_high_priority_callbacks();  // 先检查高优先级
+    //       check_low_priority_callbacks();   // 再检查低优先级
+    //       do_custom_work();                 // 自定义工作
+    //   }
+    //
+    // 适用：需要精确控制回调执行顺序的实时系统
+    // ================================================================
+    case 4:
+    {
+        node->set_mode("Custom loop - priority scheduling");
+        RCLCPP_INFO(node->get_logger(),
+                    "Custom execution loop: inserting priority logic between spin_some calls");
+
+        while (rclcpp::ok())
+        {
+            // 执行所有就绪回调
+            executor.spin_some(10ms);
+
+            // 自定义逻辑：例如检查系统状态、处理非 ROS 任务
+            node->increment_custom_loop();
+            if (node->get_custom_loop_count() % 50 == 0)
+            {
+                RCLCPP_INFO(node->get_logger(),
+                            "[Priority scheduling] loop=%d, callbacks=%d",
+                            node->get_custom_loop_count(),
+                            node->get_callback_count());
+            }
+
+            // 控制循环频率
+            std::this_thread::sleep_for(5ms);
+        }
+        break;
+    }
+
+    default:
+    {
+        RCLCPP_WARN(node->get_logger(), "Unknown mode %d, using default spin()", mode);
+        executor.spin();
+        break;
+    }
+    }
+
+    rclcpp::shutdown(); // 清理 ROS2 资源
     return 0;
 }

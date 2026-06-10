@@ -18,7 +18,8 @@
 
 using namespace std::chrono_literals;
 
-class ExecutorCallbackGroupNode : public rclcpp::Node {
+class ExecutorCallbackGroupNode : public rclcpp::Node
+{
 public:
     ExecutorCallbackGroupNode()
         : Node("executor_callback_groups"), timer_count_(0)
@@ -44,12 +45,14 @@ public:
         // ================================================================
         fast_timer_ = this->create_wall_timer(
             100ms,
-            [this]() {
+            [this]()
+            {
                 timer_count_++;
                 RCLCPP_INFO(this->get_logger(),
-                    "[定时器 10Hz] #%d, 线程=%zu, 组=timer_group",
-                    timer_count_, get_thread_id());
-            }, timer_group_);
+                            "[Timer 10Hz] #%d, thread=%zu, group=timer_group",
+                            timer_count_, get_thread_id());
+            },
+            timer_group_);
 
         // ================================================================
         // 2. 服务端 —— 绑定到 service_group_
@@ -58,16 +61,18 @@ public:
         srv_ = this->create_service<example_interfaces::srv::Trigger>(
             "/test_trigger",
             [this](const std::shared_ptr<example_interfaces::srv::Trigger::Request> /*req*/,
-                   std::shared_ptr<example_interfaces::srv::Trigger::Response> resp) {
+                   std::shared_ptr<example_interfaces::srv::Trigger::Response> resp)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[服务端] 收到请求, 线程=%zu, 组=service_group",
-                    get_thread_id());
+                            "[Service server] received request, thread=%zu, group=service_group",
+                            get_thread_id());
                 // 模拟耗时服务处理
                 std::this_thread::sleep_for(200ms);
                 resp->success = true;
-                resp->message = "服务处理完成";
-                RCLCPP_INFO(this->get_logger(), "[服务端] 处理完成");
-            }, rclcpp::ServicesQoS(), service_group_);
+                resp->message = "Service processing completed";
+                RCLCPP_INFO(this->get_logger(), "[Service server] processing completed");
+            },
+            rclcpp::ServicesQoS(), service_group_);
 
         // ================================================================
         // 3. 客户端 —— 不指定回调组（使用默认组）
@@ -82,58 +87,67 @@ public:
         //    C++ 中绑定回调组必须通过 SubscriptionOptions
         // ================================================================
         rclcpp::SubscriptionOptions reentrant_opts;
-        reentrant_opts.callback_group = reentrant_group_;
+        reentrant_opts.callback_group = reentrant_group_; // 将订阅绑定到可重入组
 
         sub1_ = this->create_subscription<std_msgs::msg::String>(
             "/topic_a", 10,
-            [this](const std_msgs::msg::String::SharedPtr msg) {
+            [this](const std_msgs::msg::String::SharedPtr msg)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[订阅A] 收到: '%s', 线程=%zu, 组=reentrant",
-                    msg->data.c_str(), get_thread_id());
+                            "[Subscription A] received: '%s', thread=%zu, group=reentrant",
+                            msg->data.c_str(), get_thread_id());
                 std::this_thread::sleep_for(100ms);
-            }, reentrant_opts);
+            },
+            reentrant_opts);
 
         sub2_ = this->create_subscription<std_msgs::msg::String>(
             "/topic_b", 10,
-            [this](const std_msgs::msg::String::SharedPtr msg) {
+            [this](const std_msgs::msg::String::SharedPtr msg)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "[订阅B] 收到: '%s', 线程=%zu, 组=reentrant",
-                    msg->data.c_str(), get_thread_id());
+                            "[Subscription B] received: '%s', thread=%zu, group=reentrant",
+                            msg->data.c_str(), get_thread_id());
                 std::this_thread::sleep_for(100ms);
-            }, reentrant_opts);
+            },
+            reentrant_opts);
 
         // ================================================================
         // 5. 周期调用服务 —— 测试回调组隔离效果
         // ================================================================
         call_timer_ = this->create_wall_timer(
             2s,
-            [this]() {
-                if (!client_->wait_for_service(100ms)) {
-                    RCLCPP_WARN(this->get_logger(), "服务未就绪");
+            [this]()
+            {
+                if (!client_->wait_for_service(100ms))
+                { // 等待服务端就绪，超时100ms
+                    RCLCPP_WARN(this->get_logger(), "Service not ready");
                     return;
                 }
                 auto req = std::make_shared<example_interfaces::srv::Trigger::Request>();
                 // 异步调用服务（不等待结果，避免在回调中阻塞）
-                client_->async_send_request(req,
-                    [this](rclcpp::Client<example_interfaces::srv::Trigger>::SharedFuture future) {
-                        auto result = future.get();
-                        RCLCPP_INFO(this->get_logger(),
-                            "[客户端] 服务响应: success=%d, msg='%s'",
-                            result->success, result->message.c_str());
-                    });
+                client_->async_send_request(req, // 发送异步请求，回调中处理响应
+                                            [this](rclcpp::Client<example_interfaces::srv::Trigger>::SharedFuture future)
+                                            {
+                                                auto result = future.get(); // 获取异步响应结果
+                                                RCLCPP_INFO(this->get_logger(),
+                                                            "[Client] service response: success=%d, msg='%s'",
+                                                            result->success, result->message.c_str());
+                                            });
                 RCLCPP_INFO(this->get_logger(),
-                    "[客户端] 已发送异步请求");
-            }, timer_group_);
+                            "[Client] async request sent");
+            },
+            timer_group_);
 
-        RCLCPP_INFO(this->get_logger(), "=== 执行器+回调组配合节点已启动 ===");
+        RCLCPP_INFO(this->get_logger(), "=== Executor + callback groups node started ===");
         RCLCPP_INFO(this->get_logger(),
-            "观察: 服务端在service_group，客户端在timer_group，互不阻塞");
+                    "Observe: server in service_group, client in timer_group, no mutual blocking");
         RCLCPP_INFO(this->get_logger(),
-            "可重入组的两个订阅可以并发处理消息");
+                    "Two subscriptions in reentrant group can process messages concurrently");
     }
 
 private:
-    std::size_t get_thread_id() {
+    std::size_t get_thread_id()
+    {
         std::ostringstream oss;
         oss << std::this_thread::get_id();
         return std::hash<std::string>{}(oss.str()) % 10000;
@@ -155,8 +169,9 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub2_;
 };
 
-int main(int argc, char** argv) {
-    rclcpp::init(argc, argv);
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv); // 初始化 ROS2
 
     auto node = std::make_shared<ExecutorCallbackGroupNode>();
 
@@ -176,14 +191,14 @@ int main(int argc, char** argv) {
     // ================================================================
 
     rclcpp::executors::MultiThreadedExecutor executor(
-        rclcpp::ExecutorOptions(), 4);  // 4个线程
+        rclcpp::ExecutorOptions(), 4); // 4个线程，确保回调组间可充分并发
     executor.add_node(node);
 
     RCLCPP_INFO(node->get_logger(),
-        "使用 MultiThreadedExecutor (4线程)，回调组才能发挥作用");
+                "Using MultiThreadedExecutor (4 threads) for callback groups to take effect");
 
-    executor.spin();
+    executor.spin(); // 阻塞执行，回调组在多线程下才能发挥作用
 
-    rclcpp::shutdown();
+    rclcpp::shutdown(); // 清理 ROS2 资源
     return 0;
 }
