@@ -21,9 +21,11 @@
 
 using CountUp = action_learning_cpp::action::CountUp;
 
-class CountUpServer : public rclcpp::Node {
+class CountUpServer : public rclcpp::Node
+{
 public:
-    CountUpServer() : Node("count_up_server") {
+    CountUpServer() : Node("count_up_server")
+    {
         // ================================================================
         // 创建 Action Server
         //    参数：
@@ -35,7 +37,7 @@ public:
         // ================================================================
         action_server_ = rclcpp_action::create_server<CountUp>(
             this,
-            "count_up",
+            "count_up1",
             std::bind(&CountUpServer::handle_goal, this,
                       std::placeholders::_1, std::placeholders::_2),
             std::bind(&CountUpServer::handle_cancel, this,
@@ -63,14 +65,16 @@ private:
     //   GoalResponse::ACCEPT_AND_DEFER — 接受但延迟执行（高级用法）
     // ================================================================
     rclcpp_action::GoalResponse handle_goal(
-        const rclcpp_action::GoalUUID& uuid,
-        std::shared_ptr<const CountUp::Goal> goal) {
+        const rclcpp_action::GoalUUID &uuid,
+        std::shared_ptr<const CountUp::Goal> goal)
+    {
         (void)uuid;
 
         RCLCPP_INFO(this->get_logger(), "收到目标请求: target = %ld", goal->target);
 
         // ── 目标合法性校验 ──
-        if (goal->target <= 0) {
+        if (goal->target <= 0)
+        {
             RCLCPP_WARN(this->get_logger(), "拒绝目标: target 必须大于 0");
             return rclcpp_action::GoalResponse::REJECT;
         }
@@ -91,7 +95,8 @@ private:
     //   CancelResponse::REJECT — 拒绝取消（目标继续执行）
     // ================================================================
     rclcpp_action::CancelResponse handle_cancel(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle) {
+        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
+    {
         RCLCPP_INFO(this->get_logger(), "收到取消请求，允许取消");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
@@ -108,12 +113,13 @@ private:
     //    必须在新线程中执行耗时逻辑。
     // ================================================================
     void handle_accepted(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle) {
+        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
+    {
         // 在新线程中执行，避免阻塞 executor
         std::thread{
             std::bind(&CountUpServer::execute, this, std::placeholders::_1),
-            goal_handle
-        }.detach();
+            goal_handle}
+            .detach();
     }
 
     // ================================================================
@@ -128,7 +134,8 @@ private:
     // ⚠️ 调用终止方法后不能再 publish_feedback！
     // ================================================================
     void execute(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle) {
+        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
+    {
         RCLCPP_INFO(this->get_logger(), "开始执行目标...");
 
         // 从 GoalHandle 获取目标
@@ -137,15 +144,17 @@ private:
         auto result = std::make_shared<CountUp::Result>();
         auto feedback = std::make_shared<CountUp::Feedback>();
 
-        rclcpp::Rate loop_rate(1);  // 1Hz — 每秒计数一次
+        rclcpp::Rate loop_rate(1); // 1Hz — 每秒计数一次
 
-        for (int64_t i = 0; i <= goal->target; ++i) {
+        for (int64_t i = 0; i <= goal->target; ++i)
+        {
             // ── 检查是否被取消 ──
-            if (goal_handle->is_canceling()) {
+            if (goal_handle->is_canceling())
+            {
                 result->final_count = i;
                 goal_handle->canceled(result);
                 RCLCPP_INFO(this->get_logger(),
-                    "目标被取消，当前值: %ld", i);
+                            "目标被取消，当前值: %ld", i);
                 return;
             }
 
@@ -156,7 +165,7 @@ private:
             goal_handle->publish_feedback(feedback);
 
             RCLCPP_INFO(this->get_logger(), "进度: %ld/%ld (%.1f%%)",
-                i, goal->target, feedback->progress_percent);
+                        i, goal->target, feedback->progress_percent);
 
             // 保存到结果序列
             result->sequence.push_back(i);
@@ -168,13 +177,14 @@ private:
         result->final_count = goal->target;
         goal_handle->succeed(result);
         RCLCPP_INFO(this->get_logger(),
-            "✓ 目标完成! 最终值: %ld", result->final_count);
+                    "✓ 目标完成! 最终值: %ld", result->final_count);
     }
 
     rclcpp_action::Server<CountUp>::SharedPtr action_server_;
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     rclcpp::init(argc, argv);
     auto node = std::make_shared<CountUpServer>();
     rclcpp::spin(node);

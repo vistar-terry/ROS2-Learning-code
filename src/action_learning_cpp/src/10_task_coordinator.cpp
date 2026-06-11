@@ -32,9 +32,11 @@ using MoveArm = action_learning_cpp::action::MoveArm;
 using Navigate = action_learning_cpp::action::Navigate;
 using namespace std::chrono_literals;
 
-class TaskCoordinator : public rclcpp::Node {
+class TaskCoordinator : public rclcpp::Node
+{
 public:
-    TaskCoordinator() : Node("task_coordinator") {
+    TaskCoordinator() : Node("task_coordinator")
+    {
         arm_client_ = rclcpp_action::create_client<MoveArm>(this, "move_arm");
         nav_client_ = rclcpp_action::create_client<Navigate>(this, "navigate");
 
@@ -45,19 +47,20 @@ public:
         bool arm_ok = arm_client_->wait_for_action_server(5s);
         bool nav_ok = nav_client_->wait_for_action_server(5s);
 
-        if (!arm_ok || !nav_ok) {
+        if (!arm_ok || !nav_ok)
+        {
             RCLCPP_ERROR(this->get_logger(),
-                "Action Server 未全部上线 (arm=%d, nav=%d)", arm_ok, nav_ok);
+                         "Action Server 未全部上线 (arm=%d, nav=%d)", arm_ok, nav_ok);
             return;
         }
 
         RCLCPP_INFO(this->get_logger(), "所有 Action Server 已上线");
 
         // 延迟 2 秒后启动任务流程
-        timer_ = this->create_wall_timer(2s, [this]() {
+        timer_ = this->create_wall_timer(2s, [this]()
+                                         {
             timer_->cancel();
-            run_task_pipeline();
-        });
+            run_task_pipeline(); });
     }
 
 private:
@@ -73,11 +76,11 @@ private:
     //                    机械臂收回 ─┤─→ 等待全部完成
     //
     // ================================================================
-    void run_task_pipeline() {
+    void run_task_pipeline()
+    {
         RCLCPP_INFO(this->get_logger(), " ");
         RCLCPP_INFO(this->get_logger(), "====== 机器人复合任务流水线启动 =======");
         RCLCPP_INFO(this->get_logger(), " ");
-
 
         // ── Phase 1: 并行启动 ──
         RCLCPP_INFO(this->get_logger(), "━━━ Phase 1: 并行启动 ━━━");
@@ -91,9 +94,10 @@ private:
         bool nav_ok = wait_for_result(nav_future, "导航");
         bool arm_ok = wait_for_result(arm_future, "机械臂");
 
-        if (!nav_ok || !arm_ok) {
+        if (!nav_ok || !arm_ok)
+        {
             RCLCPP_ERROR(this->get_logger(),
-                "Phase 1 失败 (nav=%d, arm=%d)，终止流水线", nav_ok, arm_ok);
+                         "Phase 1 失败 (nav=%d, arm=%d)，终止流水线", nav_ok, arm_ok);
             return;
         }
 
@@ -105,7 +109,8 @@ private:
         auto grasp_future = send_arm_goal(0.5, 0.5, "抓取物体 (28.6°)");
         bool grasp_ok = wait_for_result(grasp_future, "抓取");
 
-        if (!grasp_ok) {
+        if (!grasp_ok)
+        {
             RCLCPP_ERROR(this->get_logger(), "Phase 2 失败，终止流水线");
             return;
         }
@@ -122,16 +127,20 @@ private:
         bool return_arm_ok = wait_for_result(return_arm_future, "收回机械臂");
 
         RCLCPP_INFO(this->get_logger(), " ");
-        if (return_nav_ok && return_arm_ok) {
+        if (return_nav_ok && return_arm_ok)
+        {
             RCLCPP_INFO(this->get_logger(), "====== 所有任务流水线完成! =======");
-        } else {
+        }
+        else
+        {
             RCLCPP_INFO(this->get_logger(), "====== 流水线部分失败 =======");
         }
     }
 
     // ── 发送导航目标，返回 result future ──
     std::shared_future<rclcpp_action::ClientGoalHandle<Navigate>::WrappedResult>
-    send_nav_goal(double x, double y, double speed, const std::string& desc) {
+    send_nav_goal(double x, double y, double speed, const std::string &desc)
+    {
         auto goal_msg = Navigate::Goal();
         goal_msg.target_x = x;
         goal_msg.target_y = y;
@@ -140,11 +149,15 @@ private:
         auto options = rclcpp_action::Client<Navigate>::SendGoalOptions();
 
         options.goal_response_callback =
-            [this, desc](const rclcpp_action::ClientGoalHandle<Navigate>::SharedPtr&
-                             handle) {
-            if (handle) {
+            [this, desc](const rclcpp_action::ClientGoalHandle<Navigate>::SharedPtr &
+                             handle)
+        {
+            if (handle)
+            {
                 RCLCPP_INFO(this->get_logger(), "  [Nav] ▶ %s — 已接受", desc.c_str());
-            } else {
+            }
+            else
+            {
                 RCLCPP_ERROR(this->get_logger(), "  [Nav] ✗ %s — 被拒绝", desc.c_str());
             }
         };
@@ -152,11 +165,12 @@ private:
         options.feedback_callback =
             [this, desc](
                 rclcpp_action::ClientGoalHandle<Navigate>::SharedPtr,
-                const std::shared_ptr<const Navigate::Feedback> fb) {
+                const std::shared_ptr<const Navigate::Feedback> fb)
+        {
             RCLCPP_DEBUG(this->get_logger(),
-                "  [Nav] %s | (%.2f,%.2f) dist=%.2f %.0f%%",
-                desc.c_str(), fb->current_x, fb->current_y,
-                fb->distance_remaining, fb->progress_percent);
+                         "  [Nav] %s | (%.2f,%.2f) dist=%.2f %.0f%%",
+                         desc.c_str(), fb->current_x, fb->current_y,
+                         fb->distance_remaining, fb->progress_percent);
         };
 
         // ── 关键：使用 promise/future 模式获取异步结果 ──
@@ -166,15 +180,19 @@ private:
 
         options.result_callback =
             [this, desc, promise](
-                const rclcpp_action::ClientGoalHandle<Navigate>::WrappedResult& result) {
-            if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
+                const rclcpp_action::ClientGoalHandle<Navigate>::WrappedResult &result)
+        {
+            if (result.code == rclcpp_action::ResultCode::SUCCEEDED)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "  [Nav] ✓ %s | (%.2f,%.2f) %.2fs",
-                    desc.c_str(), result.result->final_x,
-                    result.result->final_y, result.result->elapsed_time);
-            } else {
+                            "  [Nav] ✓ %s | (%.2f,%.2f) %.2fs",
+                            desc.c_str(), result.result->final_x,
+                            result.result->final_y, result.result->elapsed_time);
+            }
+            else
+            {
                 RCLCPP_WARN(this->get_logger(),
-                    "  [Nav] ⚠ %s — 未成功", desc.c_str());
+                            "  [Nav] ⚠ %s — 未成功", desc.c_str());
             }
             promise->set_value(result);
         };
@@ -187,7 +205,8 @@ private:
 
     // ── 发送机械臂目标，返回 result future ──
     std::shared_future<rclcpp_action::ClientGoalHandle<MoveArm>::WrappedResult>
-    send_arm_goal(double angle, double speed, const std::string& desc) {
+    send_arm_goal(double angle, double speed, const std::string &desc)
+    {
         auto goal_msg = MoveArm::Goal();
         goal_msg.target_angle = angle;
         goal_msg.speed = speed;
@@ -195,9 +214,11 @@ private:
         auto options = rclcpp_action::Client<MoveArm>::SendGoalOptions();
 
         options.goal_response_callback =
-            [this, desc](const rclcpp_action::ClientGoalHandle<MoveArm>::SharedPtr&
-                             handle) {
-            if (handle) {
+            [this, desc](const rclcpp_action::ClientGoalHandle<MoveArm>::SharedPtr &
+                             handle)
+        {
+            if (handle)
+            {
                 RCLCPP_INFO(this->get_logger(), "  [Arm] ▶ %s — 已接受", desc.c_str());
             }
         };
@@ -205,11 +226,12 @@ private:
         options.feedback_callback =
             [this, desc](
                 rclcpp_action::ClientGoalHandle<MoveArm>::SharedPtr,
-                const std::shared_ptr<const MoveArm::Feedback> fb) {
+                const std::shared_ptr<const MoveArm::Feedback> fb)
+        {
             RCLCPP_DEBUG(this->get_logger(),
-                "  [Arm] %s | %.2f rad (%.0f%%) %s",
-                desc.c_str(), fb->current_angle,
-                fb->progress_percent, fb->status.c_str());
+                         "  [Arm] %s | %.2f rad (%.0f%%) %s",
+                         desc.c_str(), fb->current_angle,
+                         fb->progress_percent, fb->status.c_str());
         };
 
         auto promise = std::make_shared<
@@ -218,15 +240,19 @@ private:
 
         options.result_callback =
             [this, desc, promise](
-                const rclcpp_action::ClientGoalHandle<MoveArm>::WrappedResult& result) {
-            if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
+                const rclcpp_action::ClientGoalHandle<MoveArm>::WrappedResult &result)
+        {
+            if (result.code == rclcpp_action::ResultCode::SUCCEEDED)
+            {
                 RCLCPP_INFO(this->get_logger(),
-                    "  [Arm] ✓ %s | %.2f rad %.2fs",
-                    desc.c_str(), result.result->final_angle,
-                    result.result->elapsed_time);
-            } else {
+                            "  [Arm] ✓ %s | %.2f rad %.2fs",
+                            desc.c_str(), result.result->final_angle,
+                            result.result->elapsed_time);
+            }
+            else
+            {
                 RCLCPP_WARN(this->get_logger(),
-                    "  [Arm] ⚠ %s — 未成功", desc.c_str());
+                            "  [Arm] ⚠ %s — 未成功", desc.c_str());
             }
             promise->set_value(result);
         };
@@ -238,23 +264,27 @@ private:
     }
 
     // ── 等待结果（轮询方式，不阻塞 executor）──
-    template<typename T>
-    bool wait_for_result(std::shared_future<T>& future, const std::string& name) {
+    template <typename T>
+    bool wait_for_result(std::shared_future<T> &future, const std::string &name)
+    {
         auto timeout = 30s;
         auto start = std::chrono::steady_clock::now();
 
-        while (rclcpp::ok()) {
+        while (rclcpp::ok())
+        {
             auto status = future.wait_for(100ms);
-            if (status == std::future_status::ready) {
+            if (status == std::future_status::ready)
+            {
                 auto result = future.get();
                 // 检查 WrappedResult 的 code
                 return (result.code == rclcpp_action::ResultCode::SUCCEEDED);
             }
             // 检查超时
-            if (std::chrono::steady_clock::now() - start > timeout) {
+            if (std::chrono::steady_clock::now() - start > timeout)
+            {
                 RCLCPP_ERROR(this->get_logger(),
-                    "%s 超时 (%lds)", name.c_str(),
-                    timeout.count() / 1000000000L);
+                             "%s 超时 (%lds)", name.c_str(),
+                             timeout.count() / 1000000000L);
                 return false;
             }
         }
@@ -266,7 +296,8 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     rclcpp::init(argc, argv);
 
     // 协调器使用 SingleThreadedExecutor

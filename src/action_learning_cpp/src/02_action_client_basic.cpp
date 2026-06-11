@@ -23,23 +23,26 @@
 using CountUp = action_learning_cpp::action::CountUp;
 using namespace std::chrono_literals;
 
-class CountUpClient : public rclcpp::Node {
+class CountUpClient : public rclcpp::Node
+{
 public:
-    CountUpClient() : Node("count_up_client") {
+    CountUpClient() : Node("count_up_client")
+    {
         // ================================================================
         // 创建 Action Client
         //    参数：
         //    1. 节点指针
         //    2. Action 名称（必须与服务端一致）
         // ================================================================
-        client_ = rclcpp_action::create_client<CountUp>(this, "count_up");
+        client_ = rclcpp_action::create_client<CountUp>(this, "count_up1");
 
         RCLCPP_INFO(this->get_logger(), "=== CountUp Action Client 已创建 ===");
 
         // 等待服务端上线
-        if (!client_->wait_for_action_server(10s)) {
+        if (!client_->wait_for_action_server(10s))
+        {
             RCLCPP_ERROR(this->get_logger(),
-                "Action Server /count_up 未上线，退出");
+                         "Action Server /count_up 未上线，退出");
             return;
         }
 
@@ -50,7 +53,8 @@ public:
     }
 
 private:
-    void send_goal(int64_t target) {
+    void send_goal(int64_t target)
+    {
         // ── 创建目标消息 ──
         auto goal_msg = CountUp::Goal();
         goal_msg.target = target;
@@ -74,15 +78,19 @@ private:
         //    服务端接受或拒绝目标时触发
         //    参数：GoalHandle 的 SharedFuture
         send_goal_options.goal_response_callback =
-            [this](const rclcpp_action::ClientGoalHandle<CountUp>::SharedPtr&
-                       goal_handle) {
-                if (!goal_handle) {
-                    RCLCPP_ERROR(this->get_logger(), "目标被拒绝!");
-                } else {
-                    RCLCPP_INFO(this->get_logger(),
-                        "目标被接受，等待执行...");
-                }
-            };
+            [this](const rclcpp_action::ClientGoalHandle<CountUp>::SharedPtr &
+                       goal_handle)
+        {
+            if (!goal_handle)
+            {
+                RCLCPP_ERROR(this->get_logger(), "目标被拒绝!");
+            }
+            else
+            {
+                RCLCPP_INFO(this->get_logger(),
+                            "目标被接受，等待执行...");
+            }
+        };
 
         // ── 回调2: feedback_callback ──
         //    服务端发布反馈时触发
@@ -90,38 +98,41 @@ private:
         send_goal_options.feedback_callback =
             [this](
                 rclcpp_action::ClientGoalHandle<CountUp>::SharedPtr,
-                const std::shared_ptr<const CountUp::Feedback> feedback) {
-                RCLCPP_INFO(this->get_logger(),
-                    "收到反馈: current = %ld, progress = %.1f%%",
-                    feedback->current_count, feedback->progress_percent);
-            };
+                const std::shared_ptr<const CountUp::Feedback> feedback)
+        {
+            RCLCPP_INFO(this->get_logger(),
+                        "收到反馈: current = %ld, progress = %.1f%%",
+                        feedback->current_count, feedback->progress_percent);
+        };
 
         // ── 回调3: result_callback ──
         //    目标执行完成时触发（成功/失败/取消）
         //    参数：WrappedResult（包含 result, code, goal_handle）
         send_goal_options.result_callback =
-            [this](const rclcpp_action::ClientGoalHandle<CountUp>::WrappedResult&
-                       result) {
-                switch (result.code) {
-                case rclcpp_action::ResultCode::SUCCEEDED:
-                    RCLCPP_INFO(this->get_logger(),
-                        "✓ 目标成功! final_count = %ld",
-                        result.result->final_count);
-                    break;
-                case rclcpp_action::ResultCode::ABORTED:
-                    RCLCPP_ERROR(this->get_logger(), "目标被中止!");
-                    break;
-                case rclcpp_action::ResultCode::CANCELED:
-                    RCLCPP_WARN(this->get_logger(), "目标被取消");
-                    break;
-                default:
-                    RCLCPP_ERROR(this->get_logger(), "未知结果代码");
-                    break;
-                }
-                // 结果中的序列
+            [this](const rclcpp_action::ClientGoalHandle<CountUp>::WrappedResult &
+                       result)
+        {
+            switch (result.code)
+            {
+            case rclcpp_action::ResultCode::SUCCEEDED:
                 RCLCPP_INFO(this->get_logger(),
-                    "序列长度: %zu", result.result->sequence.size());
-            };
+                            "✓ 目标成功! final_count = %ld",
+                            result.result->final_count);
+                break;
+            case rclcpp_action::ResultCode::ABORTED:
+                RCLCPP_ERROR(this->get_logger(), "目标被中止!");
+                break;
+            case rclcpp_action::ResultCode::CANCELED:
+                RCLCPP_WARN(this->get_logger(), "目标被取消");
+                break;
+            default:
+                RCLCPP_ERROR(this->get_logger(), "未知结果代码");
+                break;
+            }
+            // 结果中的序列
+            RCLCPP_INFO(this->get_logger(),
+                        "序列长度: %zu", result.result->sequence.size());
+        };
 
         // ── 发送目标 ──
         RCLCPP_INFO(this->get_logger(), "发送目标: target = %ld", target);
@@ -131,7 +142,8 @@ private:
     rclcpp_action::Client<CountUp>::SharedPtr client_;
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     rclcpp::init(argc, argv);
     auto node = std::make_shared<CountUpClient>();
     rclcpp::spin(node);

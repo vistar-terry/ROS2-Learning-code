@@ -22,9 +22,11 @@
 
 using CountUp = action_learning_cpp::action::CountUp;
 
-class FeedbackServer : public rclcpp::Node {
+class FeedbackServer : public rclcpp::Node
+{
 public:
-    FeedbackServer() : Node("feedback_server"), current_goal_handle_(nullptr) {
+    FeedbackServer() : Node("feedback_server"), current_goal_handle_(nullptr)
+    {
         action_server_ = rclcpp_action::create_server<CountUp>(
             this,
             "count_up",
@@ -41,13 +43,15 @@ public:
 
 private:
     rclcpp_action::GoalResponse handle_goal(
-        const rclcpp_action::GoalUUID& uuid,
-        std::shared_ptr<const CountUp::Goal> goal) {
+        const rclcpp_action::GoalUUID &uuid,
+        std::shared_ptr<const CountUp::Goal> goal)
+    {
         (void)uuid;
 
         RCLCPP_INFO(this->get_logger(), "收到目标: target = %ld", goal->target);
 
-        if (goal->target <= 0) {
+        if (goal->target <= 0)
+        {
             RCLCPP_WARN(this->get_logger(), "拒绝: target ≤ 0");
             return rclcpp_action::GoalResponse::REJECT;
         }
@@ -55,10 +59,11 @@ private:
         // ── 互斥检查：如果正在执行，拒绝新目标 ──
         //    生产环境中可选择：抢占当前目标 / 排队 / 拒绝
         std::lock_guard<std::mutex> lock(goal_mutex_);
-        if (current_goal_handle_ && current_goal_handle_->is_active()) {
+        if (current_goal_handle_ && current_goal_handle_->is_active())
+        {
             RCLCPP_WARN(this->get_logger(),
-                "拒绝: 正在执行另一个目标 (current target = %ld)",
-                current_goal_handle_->get_goal()->target);
+                        "拒绝: 正在执行另一个目标 (current target = %ld)",
+                        current_goal_handle_->get_goal()->target);
             return rclcpp_action::GoalResponse::REJECT;
         }
 
@@ -66,22 +71,27 @@ private:
     }
 
     rclcpp_action::CancelResponse handle_cancel(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle) {
+        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
+    {
         RCLCPP_INFO(this->get_logger(), "允许取消目标");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
 
     void handle_accepted(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle) {
+        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
+    {
         std::lock_guard<std::mutex> lock(goal_mutex_);
         current_goal_handle_ = goal_handle;
         std::thread{std::bind(&FeedbackServer::execute, this,
-                               std::placeholders::_1), goal_handle}.detach();
+                              std::placeholders::_1),
+                    goal_handle}
+            .detach();
     }
 
     void execute(
-        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle) {
+        const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
+    {
         auto goal = goal_handle->get_goal();
         auto result = std::make_shared<CountUp::Result>();
         auto feedback = std::make_shared<CountUp::Feedback>();
@@ -95,17 +105,20 @@ private:
         int64_t current = 0;
         // 每个大步骤耗时 1 秒，10Hz 反馈意味着每步发布 10 次 feedback
         int64_t steps = goal->target;
-        int sub_steps_per_sec = 10;  // 10Hz → 每秒10个子步骤
+        int sub_steps_per_sec = 10; // 10Hz → 每秒10个子步骤
 
-        for (int64_t step = 0; step <= steps; ++step) {
-            for (int sub = 0; sub < sub_steps_per_sec; ++sub) {
+        for (int64_t step = 0; step <= steps; ++step)
+        {
+            for (int sub = 0; sub < sub_steps_per_sec; ++sub)
+            {
                 // ── 检查取消 ──
-                if (goal_handle->is_canceling()) {
+                if (goal_handle->is_canceling())
+                {
                     result->final_count = current;
                     goal_handle->canceled(result);
                     RCLCPP_INFO(this->get_logger(),
-                        "目标已取消, 当前值: %.1f",
-                        static_cast<double>(current));
+                                "目标已取消, 当前值: %.1f",
+                                static_cast<double>(current));
                     cleanup_goal();
                     return;
                 }
@@ -113,7 +126,7 @@ private:
                 // ── 计算当前插值 ──
                 double fraction = static_cast<double>(sub) / sub_steps_per_sec;
                 current = step + static_cast<int64_t>(
-                    fraction * 1.0);  // 插值到下一个整数
+                                     fraction * 1.0); // 插值到下一个整数
 
                 // ── 发布 Feedback ──
                 feedback->current_count = step;
@@ -133,11 +146,12 @@ private:
         result->final_count = goal->target;
         goal_handle->succeed(result);
         RCLCPP_INFO(this->get_logger(),
-            "✓ 完成! final_count = %ld", result->final_count);
+                    "✓ 完成! final_count = %ld", result->final_count);
         cleanup_goal();
     }
 
-    void cleanup_goal() {
+    void cleanup_goal()
+    {
         std::lock_guard<std::mutex> lock(goal_mutex_);
         current_goal_handle_ = nullptr;
     }
@@ -147,7 +161,8 @@ private:
     std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> current_goal_handle_;
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     rclcpp::init(argc, argv);
     auto node = std::make_shared<FeedbackServer>();
     rclcpp::spin(node);
