@@ -41,12 +41,12 @@ public:
         if (policy_str == "reject")
         {
             policy_ = GoalPolicy::REJECT;
-            RCLCPP_INFO(this->get_logger(), "策略: REJECT（忙碌时拒绝新目标）");
+            RCLCPP_INFO(this->get_logger(), "Policy: REJECT (reject new goal when busy)");
         }
         else
         {
             policy_ = GoalPolicy::PREEMPT;
-            RCLCPP_INFO(this->get_logger(), "策略: PREEMPT（忙碌时抢占旧目标）");
+            RCLCPP_INFO(this->get_logger(), "Policy: PREEMPT (preempt old goal when busy)");
         }
 
         action_server_ = rclcpp_action::create_server<CountUp>(
@@ -59,7 +59,7 @@ public:
             std::bind(&PolicyServer::handle_accepted, this,
                       std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "=== Policy Server 已启动 ===");
+        RCLCPP_INFO(this->get_logger(), "=== Policy Server started ===");
     }
 
 private:
@@ -70,11 +70,11 @@ private:
         (void)uuid;
 
         RCLCPP_INFO(this->get_logger(),
-                    "收到目标: target = %ld", goal->target);
+                    "Received goal: target = %ld", goal->target);
 
         if (goal->target <= 0)
         {
-            RCLCPP_WARN(this->get_logger(), "拒绝: target <= 0");
+            RCLCPP_WARN(this->get_logger(), "Rejected: target <= 0");
             return rclcpp_action::GoalResponse::REJECT;
         }
 
@@ -87,7 +87,7 @@ private:
             // ── 策略1: REJECT ──
             case GoalPolicy::REJECT:
                 RCLCPP_WARN(this->get_logger(),
-                            "REJECT: 正在执行目标 (target=%ld)，拒绝新目标",
+                            "REJECT: goal in progress (target=%ld), rejecting new goal",
                             current_goal_handle_->get_goal()->target);
                 return rclcpp_action::GoalResponse::REJECT;
 
@@ -95,7 +95,7 @@ private:
             //    接受新目标，旧目标会在 execute 中检测到被抢占并自行取消
             case GoalPolicy::PREEMPT:
                 RCLCPP_INFO(this->get_logger(),
-                            "PREEMPT: 将抢占当前目标 (target=%ld)，接受新目标",
+                            "PREEMPT: preempting current goal (target=%ld), accepting new goal",
                             current_goal_handle_->get_goal()->target);
                 return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
             }
@@ -107,7 +107,7 @@ private:
     rclcpp_action::CancelResponse handle_cancel(
         const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
     {
-        RCLCPP_INFO(this->get_logger(), "允许取消");
+        RCLCPP_INFO(this->get_logger(), "Cancel accepted");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -133,7 +133,7 @@ private:
         auto feedback = std::make_shared<CountUp::Feedback>();
 
         RCLCPP_INFO(this->get_logger(),
-                    "执行目标: target = %ld", goal->target);
+                    "Executing goal: target = %ld", goal->target);
 
         rclcpp::Rate loop_rate(1);
 
@@ -150,7 +150,7 @@ private:
                     result->sequence.push_back(i);
                     goal_handle->canceled(result);
                     RCLCPP_WARN(this->get_logger(),
-                                "目标被抢占 (target=%ld), 当前: %ld",
+                                "Goal preempted (target=%ld), current: %ld",
                                 goal->target, i);
                     return;
                 }
@@ -162,7 +162,7 @@ private:
                 result->final_count = i;
                 goal_handle->canceled(result);
                 RCLCPP_WARN(this->get_logger(),
-                            "目标被客户端取消 (target=%ld), 当前: %ld",
+                            "Goal canceled by client (target=%ld), current: %ld",
                             goal->target, i);
                 return;
             }
@@ -173,7 +173,7 @@ private:
             goal_handle->publish_feedback(feedback);
 
             RCLCPP_INFO(this->get_logger(),
-                        "执行中: %ld/%ld (%.1f%%)", i, goal->target, feedback->progress_percent);
+                        "In progress: %ld/%ld (%.1f%%)", i, goal->target, feedback->progress_percent);
 
             result->sequence.push_back(i);
             loop_rate.sleep();
@@ -182,7 +182,7 @@ private:
         result->final_count = goal->target;
         goal_handle->succeed(result);
         RCLCPP_INFO(this->get_logger(),
-                    "✓ 完成! final = %ld", result->final_count);
+                    "Completed! final = %ld", result->final_count);
 
         // 清理
         std::lock_guard<std::mutex> lock(goal_mutex_);

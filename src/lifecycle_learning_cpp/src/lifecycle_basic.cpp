@@ -63,6 +63,7 @@ public:
     // ================================================================
     CallbackReturn on_configure(const rclcpp_lifecycle::State & previous_state) override
     {
+        (void)previous_state;  // 避免未使用参数的编译警告
         RCLCPP_INFO(this->get_logger(), "━━━ on_configure ━━━");
         RCLCPP_INFO(this->get_logger(), "  Unconfigured → Inactive");
         RCLCPP_INFO(this->get_logger(), "  Perform here: initialize resources, read configuration, create publisher");
@@ -137,6 +138,7 @@ public:
     // ================================================================
     CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state) override
     {
+        (void)previous_state;  // 避免未使用参数的编译警告
         RCLCPP_INFO(this->get_logger(), "━━━ on_cleanup ━━━");
         RCLCPP_INFO(this->get_logger(), "  Inactive → Unconfigured");
         RCLCPP_INFO(this->get_logger(), "  Perform here: release resources, close connections, reset state");

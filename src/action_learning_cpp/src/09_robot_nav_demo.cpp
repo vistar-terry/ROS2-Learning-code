@@ -63,7 +63,7 @@ public:
             std::bind(&NavServer::handle_accepted, this,
                       std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "=== 导航 Action Server 已启动 ===");
+        RCLCPP_INFO(this->get_logger(), "=== Navigation Action Server started ===");
         RCLCPP_INFO(this->get_logger(), "Action: /navigate");
     }
 
@@ -75,7 +75,7 @@ private:
         (void)uuid;
 
         RCLCPP_INFO(this->get_logger(),
-                    "收到导航请求: (%.2f, %.2f), speed=%.1fx",
+                    "Received nav request: (%.2f, %.2f), speed=%.1fx",
                     goal->target_x, goal->target_y, goal->speed);
 
         // 目标位置不能离原点太远
@@ -83,13 +83,13 @@ private:
         if (dist > 100.0)
         {
             RCLCPP_WARN(this->get_logger(),
-                        "拒绝: 目标距离 %.2f 超过最大范围 100", dist);
+                        "Rejected: target distance %.2f exceeds max range 100", dist);
             return rclcpp_action::GoalResponse::REJECT;
         }
 
         if (goal->speed < 0.1 || goal->speed > 2.0)
         {
-            RCLCPP_WARN(this->get_logger(), "拒绝: 速度因子超范围");
+            RCLCPP_WARN(this->get_logger(), "Rejected: speed factor out of range");
             return rclcpp_action::GoalResponse::REJECT;
         }
 
@@ -99,7 +99,7 @@ private:
     rclcpp_action::CancelResponse handle_cancel(
         const std::shared_ptr<rclcpp_action::ServerGoalHandle<Navigate>> goal_handle)
     {
-        RCLCPP_INFO(this->get_logger(), "允许取消导航");
+        RCLCPP_INFO(this->get_logger(), "Cancel accepted");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -128,7 +128,7 @@ private:
         double step = speed * 0.05; // 50ms 步长
 
         RCLCPP_INFO(this->get_logger(),
-                    "开始导航: (%.2f,%.2f) → (%.2f,%.2f), 距离=%.2fm",
+                    "Navigating: (%.2f,%.2f) -> (%.2f,%.2f), distance=%.2fm",
                     current.x, current.y, target.x, target.y, total_distance);
 
         auto start_time = std::chrono::steady_clock::now();
@@ -145,13 +145,13 @@ private:
                 result->success = false;
                 result->final_x = current.x;
                 result->final_y = current.y;
-                result->message = "导航被取消";
+                result->message = "Navigation canceled";
                 result->elapsed_time = elapsed_since(start_time);
                 goal_handle->canceled(result);
                 sim_position_ = current;
 
                 RCLCPP_INFO(this->get_logger(),
-                            "导航取消, 位置: (%.2f, %.2f)", current.x, current.y);
+                            "Navigation canceled, position: (%.2f, %.2f)", current.x, current.y);
                 return;
             }
 
@@ -159,7 +159,7 @@ private:
             if (dist(rng) < 0.02)
             { // 2% 概率遇到障碍
                 RCLCPP_WARN(this->get_logger(),
-                            "⚠ 检测到障碍物! 暂停 0.5s 避障...");
+                            "Obstacle detected! Pausing 0.5s for avoidance...");
                 feedback->status = "obstacle_avoidance";
                 goal_handle->publish_feedback(feedback);
                 std::this_thread::sleep_for(500ms);
@@ -195,12 +195,12 @@ private:
         result->final_x = current.x;
         result->final_y = current.y;
         result->elapsed_time = elapsed;
-        result->message = "导航完成";
+        result->message = "Navigation completed";
         goal_handle->succeed(result);
         sim_position_ = current;
 
         RCLCPP_INFO(this->get_logger(),
-                    "✓ 导航完成! (%.2f, %.2f), 耗时=%.2fs",
+                    "Navigation completed! (%.2f, %.2f), elapsed=%.2fs",
                     result->final_x, result->final_y, elapsed);
     }
 
@@ -227,15 +227,15 @@ public:
 
         // 预定义路径点：模拟巡逻任务
         waypoints_ = {
-            {3.0, 0.0, 1.0, "前进到 (3,0)"},
-            {3.0, 4.0, 1.0, "右转到 (3,4)"},
-            {0.0, 4.0, 1.0, "后退到 (0,4)"},
-            {0.0, 0.0, 1.5, "返回原点 (0,0) — 加速"},
+            {3.0, 0.0, 1.0, "Forward to (3,0)"},
+            {3.0, 4.0, 1.0, "Turn right to (3,4)"},
+            {0.0, 4.0, 1.0, "Back to (0,4)"},
+            {0.0, 0.0, 1.5, "Return to origin (0,0) - fast"},
         };
 
         if (!client_->wait_for_action_server(5s))
         {
-            RCLCPP_ERROR(this->get_logger(), "Server 未上线");
+            RCLCPP_ERROR(this->get_logger(), "Server not available");
             return;
         }
 
@@ -251,7 +251,7 @@ private:
         if (waypoint_index_ >= waypoints_.size())
         {
             RCLCPP_INFO(this->get_logger(),
-                        "[Client] ====== 巡逻任务完成 ======");
+                        "[Client] ====== Patrol mission completed ======");
             return;
         }
 
@@ -271,7 +271,7 @@ private:
             if (handle)
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Client] ▶ %s — 已接受", desc.c_str());
+                            "[Client] > %s — accepted", desc.c_str());
             }
         };
 
@@ -301,14 +301,14 @@ private:
             else
             {
                 RCLCPP_WARN(this->get_logger(),
-                            "[Client] ⚠ %s 未成功", desc.c_str());
+                            "[Client] ! %s failed", desc.c_str());
             }
             waypoint_index_++;
             navigate_next();
         };
 
         RCLCPP_INFO(this->get_logger(),
-                    "[Client] >>> 导航: %s", desc.c_str());
+                    "[Client] >>> Navigating: %s", desc.c_str());
         client_->async_send_goal(goal_msg, options);
     }
 

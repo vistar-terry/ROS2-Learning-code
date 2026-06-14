@@ -83,10 +83,10 @@ public:
             std::bind(&RobotArmServer::handle_accepted, this,
                       std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "=== 机械臂 Action Server 已启动 ===");
+        RCLCPP_INFO(this->get_logger(), "=== Robot Arm Action Server started ===");
         RCLCPP_INFO(this->get_logger(), "Action: /move_arm");
-        RCLCPP_INFO(this->get_logger(), "关节范围: [-3.14, 3.14] rad");
-        RCLCPP_INFO(this->get_logger(), "初始角度: 0.0 rad");
+        RCLCPP_INFO(this->get_logger(), "Joint range: [-3.14, 3.14] rad");
+        RCLCPP_INFO(this->get_logger(), "Initial angle: 0.0 rad");
     }
 
 private:
@@ -97,7 +97,7 @@ private:
         (void)uuid;
 
         RCLCPP_INFO(this->get_logger(),
-                    "收到运动请求: target=%.2f rad, speed=%.1fx",
+                    "Received move request: target=%.2f rad, speed=%.1fx",
                     goal->target_angle, goal->speed);
 
         // ── 目标验证 ──
@@ -105,7 +105,7 @@ private:
         if (goal->target_angle < -M_PI || goal->target_angle > M_PI)
         {
             RCLCPP_WARN(this->get_logger(),
-                        "拒绝: 目标角度 %.2f 超出范围 [-π, π]",
+                        "Rejected: target angle %.2f out of range [-pi, pi]",
                         goal->target_angle);
             return rclcpp_action::GoalResponse::REJECT;
         }
@@ -114,7 +114,7 @@ private:
         if (goal->speed < 0.1 || goal->speed > 2.0)
         {
             RCLCPP_WARN(this->get_logger(),
-                        "拒绝: 速度因子 %.1f 超出范围 [0.1, 2.0]",
+                        "Rejected: speed factor %.1f out of range [0.1, 2.0]",
                         goal->speed);
             return rclcpp_action::GoalResponse::REJECT;
         }
@@ -125,7 +125,7 @@ private:
     rclcpp_action::CancelResponse handle_cancel(
         const std::shared_ptr<rclcpp_action::ServerGoalHandle<MoveArm>> goal_handle)
     {
-        RCLCPP_INFO(this->get_logger(), "允许取消运动");
+        RCLCPP_INFO(this->get_logger(), "Cancel accepted");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -155,7 +155,7 @@ private:
         double total_distance = std::abs(target - start_angle);
 
         RCLCPP_INFO(this->get_logger(),
-                    "开始运动: %.2f → %.2f rad (距离=%.2f, 速度=%.1fx)",
+                    "Moving: %.2f -> %.2f rad (distance=%.2f, speed=%.1fx)",
                     start_angle, target, total_distance, speed);
 
         auto start_time = std::chrono::steady_clock::now();
@@ -168,13 +168,13 @@ private:
             {
                 result->success = false;
                 result->final_angle = joint.get_angle();
-                result->message = "运动被取消";
+                result->message = "Motion canceled";
                 result->elapsed_time = elapsed_since(start_time);
                 goal_handle->canceled(result);
 
                 sim_current_angle_ = joint.get_angle();
                 RCLCPP_INFO(this->get_logger(),
-                            "运动取消, 当前角度: %.2f rad", result->final_angle);
+                            "Motion canceled, current angle: %.2f rad", result->final_angle);
                 return;
             }
 
@@ -204,12 +204,12 @@ private:
         result->success = true;
         result->final_angle = joint.get_angle();
         result->elapsed_time = elapsed;
-        result->message = "运动完成";
+        result->message = "Motion completed";
         goal_handle->succeed(result);
 
         sim_current_angle_ = joint.get_angle();
         RCLCPP_INFO(this->get_logger(),
-                    "✓ 运动完成! 角度=%.2f rad, 耗时=%.2fs",
+                    "Motion completed! angle=%.2f rad, elapsed=%.2fs",
                     result->final_angle, elapsed);
     }
 
@@ -238,16 +238,16 @@ public:
         // 2. 下降到物体
         // 3. 返回初始位置
         goals_ = {
-            {1.57, 1.0, "旋转到物体上方 (90°)"},
-            {0.79, 0.5, "下降到物体 (45°)"},
-            {0.0, 1.5, "返回初始位置 (0°)"},
+            {1.57, 1.0, "Rotate above object (90 deg)"},
+            {0.79, 0.5, "Descend to object (45 deg)"},
+            {0.0, 1.5, "Return to home (0 deg)"},
         };
 
-        RCLCPP_INFO(this->get_logger(), "[Client] 等待 Action Server...");
+        RCLCPP_INFO(this->get_logger(), "[Client] Waiting for Action Server...");
 
         if (!client_->wait_for_action_server(5s))
         {
-            RCLCPP_ERROR(this->get_logger(), "Server 未上线");
+            RCLCPP_ERROR(this->get_logger(), "Server not available");
             return;
         }
 
@@ -264,7 +264,7 @@ private:
         if (goal_index_ >= goals_.size())
         {
             RCLCPP_INFO(this->get_logger(),
-                        "[Client] ====== 所有运动指令已完成 ======");
+                        "[Client] ====== All motion commands completed ======");
             return;
         }
 
@@ -283,12 +283,12 @@ private:
             if (handle)
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Client] ▶ %s — 已接受", desc.c_str());
+                            "[Client] > %s — accepted", desc.c_str());
             }
             else
             {
                 RCLCPP_ERROR(this->get_logger(),
-                             "[Client] ✗ %s — 被拒绝", desc.c_str());
+                             "[Client] X %s — rejected", desc.c_str());
             }
         };
 
@@ -310,14 +310,14 @@ private:
             if (result.code == rclcpp_action::ResultCode::SUCCEEDED)
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Client] ✓ %s 完成 | final=%.2f rad, time=%.2fs",
+                            "[Client] ✓ %s done | final=%.2f rad, time=%.2fs",
                             desc.c_str(), result.result->final_angle,
                             result.result->elapsed_time);
             }
             else
             {
                 RCLCPP_WARN(this->get_logger(),
-                            "[Client] ⚠ %s 未成功", desc.c_str());
+                            "[Client] ! %s failed", desc.c_str());
             }
             // 发送下一个目标
             goal_index_++;
@@ -325,7 +325,7 @@ private:
         };
 
         RCLCPP_INFO(this->get_logger(),
-                    "[Client] >>> 发送: %s", desc.c_str());
+                    "[Client] >>> Sending: %s", desc.c_str());
         client_->async_send_goal(goal_msg, options);
     }
 

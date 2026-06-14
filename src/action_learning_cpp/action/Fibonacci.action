@@ -1,0 +1,8 @@
+# Goal - 请求斐波那契数列的项数
+int64 order
+---
+# Result - 最终的完整斐波那契数列
+int64[] sequence
+---
+# Feedback - 当前已生成的部分数列
+int64[] current_sequence

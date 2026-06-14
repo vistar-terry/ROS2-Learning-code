@@ -40,21 +40,21 @@ public:
         arm_client_ = rclcpp_action::create_client<MoveArm>(this, "move_arm");
         nav_client_ = rclcpp_action::create_client<Navigate>(this, "navigate");
 
-        RCLCPP_INFO(this->get_logger(), "=== 任务协调器已创建 ===");
+        RCLCPP_INFO(this->get_logger(), "=== Task Coordinator created ===");
 
         // 等待两个 Action Server 上线
-        RCLCPP_INFO(this->get_logger(), "等待 Action Server...");
+        RCLCPP_INFO(this->get_logger(), "Waiting for Action Server...");
         bool arm_ok = arm_client_->wait_for_action_server(5s);
         bool nav_ok = nav_client_->wait_for_action_server(5s);
 
         if (!arm_ok || !nav_ok)
         {
             RCLCPP_ERROR(this->get_logger(),
-                         "Action Server 未全部上线 (arm=%d, nav=%d)", arm_ok, nav_ok);
+                         "Not all Action Servers available (arm=%d, nav=%d)", arm_ok, nav_ok);
             return;
         }
 
-        RCLCPP_INFO(this->get_logger(), "所有 Action Server 已上线");
+        RCLCPP_INFO(this->get_logger(), "All Action Servers are available");
 
         // 延迟 2 秒后启动任务流程
         timer_ = this->create_wall_timer(2s, [this]()
@@ -79,61 +79,61 @@ private:
     void run_task_pipeline()
     {
         RCLCPP_INFO(this->get_logger(), " ");
-        RCLCPP_INFO(this->get_logger(), "====== 机器人复合任务流水线启动 =======");
+        RCLCPP_INFO(this->get_logger(), "====== Robot compound task pipeline started ======");
         RCLCPP_INFO(this->get_logger(), " ");
 
         // ── Phase 1: 并行启动 ──
-        RCLCPP_INFO(this->get_logger(), "━━━ Phase 1: 并行启动 ━━━");
+        RCLCPP_INFO(this->get_logger(), "--- Phase 1: Parallel start ---");
 
         // 同时发送导航和机械臂准备目标
-        auto nav_future = send_nav_goal(3.0, 4.0, 1.0, "导航到目标位置");
-        auto arm_future = send_arm_goal(1.57, 1.0, "机械臂准备姿态 (90°)");
+        auto nav_future = send_nav_goal(3.0, 4.0, 1.0, "Navigate to target position");
+        auto arm_future = send_arm_goal(1.57, 1.0, "Arm ready pose (90 deg)");
 
         // 等待两个并行任务都完成
-        RCLCPP_INFO(this->get_logger(), "等待 Phase 1 并行任务完成...");
-        bool nav_ok = wait_for_result(nav_future, "导航");
-        bool arm_ok = wait_for_result(arm_future, "机械臂");
+        RCLCPP_INFO(this->get_logger(), "Waiting for Phase 1 parallel tasks to complete...");
+        bool nav_ok = wait_for_result(nav_future, "Navigation");
+        bool arm_ok = wait_for_result(arm_future, "Arm");
 
         if (!nav_ok || !arm_ok)
         {
             RCLCPP_ERROR(this->get_logger(),
-                         "Phase 1 失败 (nav=%d, arm=%d)，终止流水线", nav_ok, arm_ok);
+                         "Phase 1 failed (nav=%d, arm=%d), aborting pipeline", nav_ok, arm_ok);
             return;
         }
 
-        RCLCPP_INFO(this->get_logger(), "✓ Phase 1 完成!");
+        RCLCPP_INFO(this->get_logger(), "Phase 1 completed!");
 
         // ── Phase 2: 顺序执行抓取 ──
-        RCLCPP_INFO(this->get_logger(), "━━━ Phase 2: 机械臂抓取 ━━━");
+        RCLCPP_INFO(this->get_logger(), "--- Phase 2: Arm grasping ---");
 
-        auto grasp_future = send_arm_goal(0.5, 0.5, "抓取物体 (28.6°)");
-        bool grasp_ok = wait_for_result(grasp_future, "抓取");
+        auto grasp_future = send_arm_goal(0.5, 0.5, "Grasp object (28.6 deg)");
+        bool grasp_ok = wait_for_result(grasp_future, "Grasp");
 
         if (!grasp_ok)
         {
-            RCLCPP_ERROR(this->get_logger(), "Phase 2 失败，终止流水线");
+            RCLCPP_ERROR(this->get_logger(), "Phase 2 failed, aborting pipeline");
             return;
         }
 
-        RCLCPP_INFO(this->get_logger(), "✓ Phase 2 完成!");
+        RCLCPP_INFO(this->get_logger(), "Phase 2 completed!");
 
         // ── Phase 3: 并行返回 ──
-        RCLCPP_INFO(this->get_logger(), "━━━ Phase 3: 并行返回 ━━━");
+        RCLCPP_INFO(this->get_logger(), "--- Phase 3: Parallel return ---");
 
-        auto return_nav_future = send_nav_goal(0.0, 0.0, 1.5, "导航返回起点");
-        auto return_arm_future = send_arm_goal(0.0, 1.0, "机械臂收回初始姿态");
+        auto return_nav_future = send_nav_goal(0.0, 0.0, 1.5, "Navigate back to start");
+        auto return_arm_future = send_arm_goal(0.0, 1.0, "Arm return to home pose");
 
-        bool return_nav_ok = wait_for_result(return_nav_future, "返回导航");
-        bool return_arm_ok = wait_for_result(return_arm_future, "收回机械臂");
+        bool return_nav_ok = wait_for_result(return_nav_future, "Return nav");
+        bool return_arm_ok = wait_for_result(return_arm_future, "Return arm");
 
         RCLCPP_INFO(this->get_logger(), " ");
         if (return_nav_ok && return_arm_ok)
         {
-            RCLCPP_INFO(this->get_logger(), "====== 所有任务流水线完成! =======");
+            RCLCPP_INFO(this->get_logger(), "====== All task pipeline completed! ======");
         }
         else
         {
-            RCLCPP_INFO(this->get_logger(), "====== 流水线部分失败 =======");
+            RCLCPP_INFO(this->get_logger(), "====== Pipeline partially failed ======");
         }
     }
 
@@ -154,11 +154,11 @@ private:
         {
             if (handle)
             {
-                RCLCPP_INFO(this->get_logger(), "  [Nav] ▶ %s — 已接受", desc.c_str());
+                RCLCPP_INFO(this->get_logger(), "  [Nav] > %s — accepted", desc.c_str());
             }
             else
             {
-                RCLCPP_ERROR(this->get_logger(), "  [Nav] ✗ %s — 被拒绝", desc.c_str());
+                RCLCPP_ERROR(this->get_logger(), "  [Nav] X %s — rejected", desc.c_str());
             }
         };
 
@@ -192,12 +192,12 @@ private:
             else
             {
                 RCLCPP_WARN(this->get_logger(),
-                            "  [Nav] ⚠ %s — 未成功", desc.c_str());
+                            "  [Nav] ! %s — failed", desc.c_str());
             }
             promise->set_value(result);
         };
 
-        RCLCPP_INFO(this->get_logger(), "  [Nav] >>> 发送: %s", desc.c_str());
+        RCLCPP_INFO(this->get_logger(), "  [Nav] >>> Sending: %s", desc.c_str());
         nav_client_->async_send_goal(goal_msg, options);
 
         return future;
@@ -219,7 +219,7 @@ private:
         {
             if (handle)
             {
-                RCLCPP_INFO(this->get_logger(), "  [Arm] ▶ %s — 已接受", desc.c_str());
+                RCLCPP_INFO(this->get_logger(), "  [Arm] > %s — accepted", desc.c_str());
             }
         };
 
@@ -252,12 +252,12 @@ private:
             else
             {
                 RCLCPP_WARN(this->get_logger(),
-                            "  [Arm] ⚠ %s — 未成功", desc.c_str());
+                            "  [Arm] ! %s — failed", desc.c_str());
             }
             promise->set_value(result);
         };
 
-        RCLCPP_INFO(this->get_logger(), "  [Arm] >>> 发送: %s", desc.c_str());
+        RCLCPP_INFO(this->get_logger(), "  [Arm] >>> Sending: %s", desc.c_str());
         arm_client_->async_send_goal(goal_msg, options);
 
         return future;
@@ -283,7 +283,7 @@ private:
             if (std::chrono::steady_clock::now() - start > timeout)
             {
                 RCLCPP_ERROR(this->get_logger(),
-                             "%s 超时 (%lds)", name.c_str(),
+                             "%s timed out (%lds)", name.c_str(),
                              timeout.count() / 1000000000L);
                 return false;
             }

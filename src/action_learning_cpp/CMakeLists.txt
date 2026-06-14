@@ -18,6 +18,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/CountUp.action"
+  "action/Fibonacci.action"
   "action/MoveArm.action"
   "action/Navigate.action"
 )
@@ -34,8 +35,8 @@ macro(add_action_executable name)
 endmacro()
 
 # ── 10 个演示节点 ──
-add_action_executable(01_action_server_basic)
-add_action_executable(02_action_client_basic)
+add_action_executable(action_server_basic)
+add_action_executable(action_client_basic)
 add_action_executable(03_action_server_feedback)
 add_action_executable(04_action_client_feedback)
 add_action_executable(05_action_cancel_demo)

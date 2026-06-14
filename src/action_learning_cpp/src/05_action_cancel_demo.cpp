@@ -41,7 +41,7 @@ public:
             std::bind(&CancelableServer::handle_accepted, this,
                       std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "[Server] 可取消的 Action Server 已启动");
+        RCLCPP_INFO(this->get_logger(), "[Server] Cancelable Action Server started");
     }
 
 private:
@@ -50,14 +50,14 @@ private:
         std::shared_ptr<const CountUp::Goal> goal)
     {
         (void)uuid;
-        RCLCPP_INFO(this->get_logger(), "[Server] 接受目标: target = %ld", goal->target);
+        RCLCPP_INFO(this->get_logger(), "[Server] Goal accepted: target = %ld", goal->target);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
     rclcpp_action::CancelResponse handle_cancel(
         const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
     {
-        RCLCPP_INFO(this->get_logger(), "[Server] 收到取消请求 → 允许取消");
+        RCLCPP_INFO(this->get_logger(), "[Server] Cancel request received -> accepted");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -80,7 +80,7 @@ private:
         auto feedback = std::make_shared<CountUp::Feedback>();
 
         RCLCPP_INFO(this->get_logger(),
-                    "[Server] 开始执行 (target=%ld)...", goal->target);
+                    "[Server] Executing (target=%ld)...", goal->target);
 
         rclcpp::Rate loop_rate(1);
 
@@ -91,7 +91,7 @@ private:
             {
                 // ── 优雅停止：清理资源、保存中间结果 ──
                 RCLCPP_INFO(this->get_logger(),
-                            "[Server] 执行被取消，正在清理资源...");
+                            "[Server] Execution canceled, cleaning up resources...");
 
                 // 模拟资源清理（关闭文件、停止硬件等）
                 std::this_thread::sleep_for(200ms);
@@ -101,7 +101,7 @@ private:
                 goal_handle->canceled(result);
 
                 RCLCPP_INFO(this->get_logger(),
-                            "[Server] 已取消，最终值: %ld", i);
+                            "[Server] Canceled, final value: %ld", i);
                 return;
             }
 
@@ -111,7 +111,7 @@ private:
             goal_handle->publish_feedback(feedback);
 
             RCLCPP_INFO(this->get_logger(),
-                        "[Server] 进度: %ld/%ld", i, goal->target);
+                        "[Server] Progress: %ld/%ld", i, goal->target);
 
             result->sequence.push_back(i);
             loop_rate.sleep();
@@ -120,7 +120,7 @@ private:
         result->final_count = goal->target;
         goal_handle->succeed(result);
         RCLCPP_INFO(this->get_logger(),
-                    "[Server] ✓ 完成! final = %ld", result->final_count);
+                    "[Server] Completed! final = %ld", result->final_count);
     }
 
     rclcpp_action::Server<CountUp>::SharedPtr action_server_;
@@ -136,11 +136,11 @@ public:
     {
         client_ = rclcpp_action::create_client<CountUp>(this, "count_up");
 
-        RCLCPP_INFO(this->get_logger(), "[Client] 等待 Action Server...");
+        RCLCPP_INFO(this->get_logger(), "[Client] Waiting for Action Server...");
 
         if (!client_->wait_for_action_server(10s))
         {
-            RCLCPP_ERROR(this->get_logger(), "[Client] Server 未上线");
+            RCLCPP_ERROR(this->get_logger(), "[Client] Server not available");
             return;
         }
 
@@ -158,7 +158,7 @@ public:
             if (goal_handle)
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Client] 目标被接受，3秒后将取消...");
+                            "[Client] Goal accepted, will cancel in 3s...");
                 // 保存 goal_handle 用于后续取消
                 current_goal_handle_ = goal_handle;
 
@@ -166,14 +166,14 @@ public:
                 cancel_timer_ = this->create_wall_timer(3s, [this]()
                                                         {
                                                             RCLCPP_INFO(this->get_logger(),
-                                                                        "[Client] >>> 发送取消请求!");
+                                                                        "[Client] >>> Sending cancel request!");
                                                             client_->async_cancel_goal(current_goal_handle_);
                                                             cancel_timer_->cancel(); // 只触发一次
                                                         });
             }
             else
             {
-                RCLCPP_ERROR(this->get_logger(), "[Client] 目标被拒绝");
+                RCLCPP_ERROR(this->get_logger(), "[Client] Goal rejected");
             }
         };
 
@@ -182,7 +182,7 @@ public:
                    const std::shared_ptr<const CountUp::Feedback> feedback)
         {
             RCLCPP_INFO(this->get_logger(),
-                        "[Client] 反馈: %ld (%.1f%%)",
+                        "[Client] Feedback: %ld (%.1f%%)",
                         feedback->current_count, feedback->progress_percent);
         };
 
@@ -193,19 +193,19 @@ public:
             if (result.code == rclcpp_action::ResultCode::CANCELED)
             {
                 RCLCPP_WARN(this->get_logger(),
-                            "[Client] ⚠ 目标已取消! final = %ld",
+                            "[Client] Goal canceled! final = %ld",
                             result.result->final_count);
             }
             else if (result.code == rclcpp_action::ResultCode::SUCCEEDED)
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Client] ✓ 目标成功! final = %ld",
+                            "[Client] Goal succeeded! final = %ld",
                             result.result->final_count);
             }
         };
 
         RCLCPP_INFO(this->get_logger(),
-                    "[Client] 发送目标: target = 20 (将在3秒后取消)");
+                    "[Client] Sending goal: target = 20 (will cancel in 3s)");
         client_->async_send_goal(goal_msg, send_goal_options);
     }
 

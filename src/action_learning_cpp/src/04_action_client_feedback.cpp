@@ -40,16 +40,16 @@ public:
                 }
             });
 
-        RCLCPP_INFO(this->get_logger(), "=== Feedback Client 已创建 ===");
-        RCLCPP_INFO(this->get_logger(), "等待 Action Server...");
+        RCLCPP_INFO(this->get_logger(), "=== Feedback Client created ===");
+        RCLCPP_INFO(this->get_logger(), "Waiting for Action Server...");
 
         if (!client_->wait_for_action_server(10s))
         {
-            RCLCPP_ERROR(this->get_logger(), "Action Server 未上线");
+            RCLCPP_ERROR(this->get_logger(), "Action Server not available");
             return;
         }
 
-        RCLCPP_INFO(this->get_logger(), "Action Server 已上线");
+        RCLCPP_INFO(this->get_logger(), "Action Server is available");
 
         // 自动发送一次目标
         auto target = this->get_parameter("target").as_int();
@@ -72,12 +72,12 @@ private:
             if (!goal_handle)
             {
                 RCLCPP_ERROR(this->get_logger(),
-                             "目标被拒绝 (target=%ld)", target);
+                             "Goal rejected (target=%ld)", target);
             }
             else
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "✓ 目标已接受 (target=%ld)，开始执行...", target);
+                            "Goal accepted (target=%ld), executing...", target);
                 start_time_ = this->now();
             }
         };
@@ -101,7 +101,7 @@ private:
             }
 
             // ── 估算剩余时间 (ETA) ──
-            std::string eta_str = "计算中...";
+            std::string eta_str = "calculating...";
             if (start_time_.seconds() > 0 && progress > 0.01f)
             {
                 auto elapsed = (this->now() - start_time_).seconds();
@@ -128,25 +128,25 @@ private:
             {
             case rclcpp_action::ResultCode::SUCCEEDED:
                 RCLCPP_INFO(this->get_logger(),
-                            "✓ 成功! final=%ld, 耗时=%.1fs, 序列长度=%zu",
+                            "Succeeded! final=%ld, elapsed=%.1fs, seq_len=%zu",
                             result.result->final_count, elapsed,
                             result.result->sequence.size());
                 break;
             case rclcpp_action::ResultCode::ABORTED:
                 RCLCPP_ERROR(this->get_logger(),
-                             "✗ 被中止, 耗时=%.1fs", elapsed);
+                             "Aborted, elapsed=%.1fs", elapsed);
                 break;
             case rclcpp_action::ResultCode::CANCELED:
                 RCLCPP_WARN(this->get_logger(),
-                            "⚠ 被取消, 耗时=%.1fs", elapsed);
+                            "Canceled, elapsed=%.1fs", elapsed);
                 break;
             default:
-                RCLCPP_ERROR(this->get_logger(), "未知结果");
+                RCLCPP_ERROR(this->get_logger(), "Unknown result");
                 break;
             }
         };
 
-        RCLCPP_INFO(this->get_logger(), ">>> 发送目标: target = %ld", target);
+        RCLCPP_INFO(this->get_logger(), ">>> Sending goal: target = %ld", target);
         client_->async_send_goal(goal_msg, send_goal_options);
     }
 

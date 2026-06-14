@@ -35,13 +35,13 @@ public:
         : rclcpp_lifecycle::LifecycleNode("lifecycle_action_server"),
           accepting_goals_(false)
     {
-        RCLCPP_INFO(this->get_logger(), "=== Lifecycle Action Server 已创建 ===");
+        RCLCPP_INFO(this->get_logger(), "=== Lifecycle Action Server created ===");
     }
 
     // ── on_configure：创建 Action Server ──
     CallbackReturn on_configure(const rclcpp_lifecycle::State &) override
     {
-        RCLCPP_INFO(this->get_logger(), "[on_configure] 创建 Action Server...");
+        RCLCPP_INFO(this->get_logger(), "[on_configure] Creating Action Server...");
 
         // 在 configure 阶段创建 Action Server
         // 此时服务端点已注册，但不接受目标
@@ -55,14 +55,14 @@ public:
             std::bind(&LifecycleActionServer::handle_accepted, this,
                       std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "[on_configure] Action Server 已创建（暂不接受目标）");
+        RCLCPP_INFO(this->get_logger(), "[on_configure] Action Server created (not accepting goals yet)");
         return CallbackReturn::SUCCESS;
     }
 
     // ── on_activate：开始接受目标 ──
     CallbackReturn on_activate(const rclcpp_lifecycle::State &) override
     {
-        RCLCPP_INFO(this->get_logger(), "[on_activate] 开始接受目标");
+        RCLCPP_INFO(this->get_logger(), "[on_activate] Start accepting goals");
         accepting_goals_ = true;
         return CallbackReturn::SUCCESS;
     }
@@ -70,7 +70,7 @@ public:
     // ── on_deactivate：停止接受新目标 ──
     CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) override
     {
-        RCLCPP_INFO(this->get_logger(), "[on_deactivate] 停止接受新目标");
+        RCLCPP_INFO(this->get_logger(), "[on_deactivate] Stop accepting new goals");
         accepting_goals_ = false;
         return CallbackReturn::SUCCESS;
     }
@@ -78,7 +78,7 @@ public:
     // ── on_cleanup：销毁 Action Server ──
     CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) override
     {
-        RCLCPP_INFO(this->get_logger(), "[on_cleanup] 销毁 Action Server");
+        RCLCPP_INFO(this->get_logger(), "[on_cleanup] Destroying Action Server");
         action_server_.reset();
         return CallbackReturn::SUCCESS;
     }
@@ -86,7 +86,7 @@ public:
     // ── on_shutdown：最终清理 ──
     CallbackReturn on_shutdown(const rclcpp_lifecycle::State &) override
     {
-        RCLCPP_INFO(this->get_logger(), "[on_shutdown] 关闭");
+        RCLCPP_INFO(this->get_logger(), "[on_shutdown] Shutting down");
         accepting_goals_ = false;
         action_server_.reset();
         return CallbackReturn::SUCCESS;
@@ -103,25 +103,25 @@ private:
         if (!accepting_goals_)
         {
             RCLCPP_WARN(this->get_logger(),
-                        "拒绝目标: 节点未激活 (state=%s)",
+                        "Goal rejected: node not active (state=%s)",
                         this->get_current_state().label().c_str());
             return rclcpp_action::GoalResponse::REJECT;
         }
 
         if (goal->target <= 0)
         {
-            RCLCPP_WARN(this->get_logger(), "拒绝: target ≤ 0");
+            RCLCPP_WARN(this->get_logger(), "Rejected: target <= 0");
             return rclcpp_action::GoalResponse::REJECT;
         }
 
-        RCLCPP_INFO(this->get_logger(), "接受目标: target = %ld", goal->target);
+        RCLCPP_INFO(this->get_logger(), "Goal accepted: target = %ld", goal->target);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
 
     rclcpp_action::CancelResponse handle_cancel(
         const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
     {
-        RCLCPP_INFO(this->get_logger(), "允许取消");
+        RCLCPP_INFO(this->get_logger(), "Cancel accepted");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -142,7 +142,7 @@ private:
         auto result = std::make_shared<CountUp::Result>();
         auto feedback = std::make_shared<CountUp::Feedback>();
 
-        RCLCPP_INFO(this->get_logger(), "执行: target = %ld", goal->target);
+        RCLCPP_INFO(this->get_logger(), "Executing: target = %ld", goal->target);
 
         rclcpp::Rate loop_rate(1);
 
@@ -152,7 +152,7 @@ private:
             {
                 result->final_count = i;
                 goal_handle->canceled(result);
-                RCLCPP_INFO(this->get_logger(), "已取消, 当前: %ld", i);
+                RCLCPP_INFO(this->get_logger(), "Canceled, current: %ld", i);
                 return;
             }
 
@@ -161,7 +161,7 @@ private:
             {
                 // 节点被 deactivate，中止当前目标
                 RCLCPP_WARN(this->get_logger(),
-                            "节点被 deactivate，中止当前目标");
+                            "Node deactivated, aborting current goal");
                 result->final_count = i;
                 goal_handle->abort(result);
                 return;
@@ -179,7 +179,7 @@ private:
         result->final_count = goal->target;
         goal_handle->succeed(result);
         RCLCPP_INFO(this->get_logger(),
-                    "✓ 完成! final = %ld", result->final_count);
+                    "Completed! final = %ld", result->final_count);
     }
 
     rclcpp_action::Server<CountUp>::SharedPtr action_server_;

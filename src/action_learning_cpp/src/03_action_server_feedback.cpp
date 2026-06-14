@@ -37,8 +37,8 @@ public:
             std::bind(&FeedbackServer::handle_accepted, this,
                       std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "=== Feedback Server 已启动 ===");
-        RCLCPP_INFO(this->get_logger(), "特点: 10Hz反馈、互斥执行、优雅取消");
+        RCLCPP_INFO(this->get_logger(), "=== Feedback Server started ===");
+        RCLCPP_INFO(this->get_logger(), "Features: 10Hz feedback, mutual exclusion, graceful cancel");
     }
 
 private:
@@ -48,11 +48,11 @@ private:
     {
         (void)uuid;
 
-        RCLCPP_INFO(this->get_logger(), "收到目标: target = %ld", goal->target);
+        RCLCPP_INFO(this->get_logger(), "Received goal: target = %ld", goal->target);
 
         if (goal->target <= 0)
         {
-            RCLCPP_WARN(this->get_logger(), "拒绝: target ≤ 0");
+            RCLCPP_WARN(this->get_logger(), "Rejected: target <= 0");
             return rclcpp_action::GoalResponse::REJECT;
         }
 
@@ -62,7 +62,7 @@ private:
         if (current_goal_handle_ && current_goal_handle_->is_active())
         {
             RCLCPP_WARN(this->get_logger(),
-                        "拒绝: 正在执行另一个目标 (current target = %ld)",
+                        "Rejected: another goal is executing (current target = %ld)",
                         current_goal_handle_->get_goal()->target);
             return rclcpp_action::GoalResponse::REJECT;
         }
@@ -73,7 +73,7 @@ private:
     rclcpp_action::CancelResponse handle_cancel(
         const std::shared_ptr<rclcpp_action::ServerGoalHandle<CountUp>> goal_handle)
     {
-        RCLCPP_INFO(this->get_logger(), "允许取消目标");
+        RCLCPP_INFO(this->get_logger(), "Cancel request accepted");
         (void)goal_handle;
         return rclcpp_action::CancelResponse::ACCEPT;
     }
@@ -96,7 +96,7 @@ private:
         auto result = std::make_shared<CountUp::Result>();
         auto feedback = std::make_shared<CountUp::Feedback>();
 
-        RCLCPP_INFO(this->get_logger(), "开始执行: target = %ld", goal->target);
+        RCLCPP_INFO(this->get_logger(), "Executing: target = %ld", goal->target);
 
         // ── 高频反馈：10Hz ──
         //    实际机器人控制中通常需要 10~100Hz 的反馈频率
@@ -117,7 +117,7 @@ private:
                     result->final_count = current;
                     goal_handle->canceled(result);
                     RCLCPP_INFO(this->get_logger(),
-                                "目标已取消, 当前值: %.1f",
+                                "Goal canceled, current value: %.1f",
                                 static_cast<double>(current));
                     cleanup_goal();
                     return;
@@ -146,7 +146,7 @@ private:
         result->final_count = goal->target;
         goal_handle->succeed(result);
         RCLCPP_INFO(this->get_logger(),
-                    "✓ 完成! final_count = %ld", result->final_count);
+                    "Completed! final_count = %ld", result->final_count);
         cleanup_goal();
     }
 
