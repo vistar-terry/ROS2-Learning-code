@@ -84,7 +84,7 @@ public:
         pub_timer_ = this->create_wall_timer(
             1s,
             std::bind(&MutuallyExclusiveDemoNode::publish_messages, this),
-            another_group_);  // 发布定时器放在另一个组中
+            another_group_); // 发布定时器放在另一个组中
 
         RCLCPP_INFO(this->get_logger(), "================================================================");
         RCLCPP_INFO(this->get_logger(), "MutuallyExclusiveCallbackGroup 演示启动");
@@ -120,15 +120,15 @@ private:
         std::ostringstream thread_id;
         thread_id << std::this_thread::get_id();
         RCLCPP_INFO(this->get_logger(),
-            "[callback_a] 收到: %s, 线程: %s, 共享数据: %d",
-            msg->data.c_str(), thread_id.str().c_str(), shared_data_);
+                    "[callback_a] 收到: %s, 线程: %s, 共享数据: %d",
+                    msg->data.c_str(), thread_id.str().c_str(), shared_data_);
 
         // 修改共享数据（MutuallyExclusive 保护，无需加锁）
         shared_data_ += 1;
         std::this_thread::sleep_for(500ms);
 
         RCLCPP_INFO(this->get_logger(),
-            "[callback_a] 处理完成, 共享数据更新为: %d", shared_data_);
+                    "[callback_a] 处理完成, 共享数据更新为: %d", shared_data_);
     }
 
     /**
@@ -141,14 +141,14 @@ private:
         std::ostringstream thread_id;
         thread_id << std::this_thread::get_id();
         RCLCPP_INFO(this->get_logger(),
-            "[callback_b] 收到: %s, 线程: %s, 共享数据: %d",
-            msg->data.c_str(), thread_id.str().c_str(), shared_data_);
+                    "[callback_b] 收到: %s, 线程: %s, 共享数据: %d",
+                    msg->data.c_str(), thread_id.str().c_str(), shared_data_);
 
         shared_data_ += 10;
         std::this_thread::sleep_for(300ms);
 
         RCLCPP_INFO(this->get_logger(),
-            "[callback_b] 处理完成, 共享数据更新为: %d", shared_data_);
+                    "[callback_b] 处理完成, 共享数据更新为: %d", shared_data_);
     }
 
     /**
@@ -160,8 +160,8 @@ private:
         std::ostringstream thread_id;
         thread_id << std::this_thread::get_id();
         RCLCPP_INFO(this->get_logger(),
-            "[callback_c] 收到: %s, 线程: %s",
-            msg->data.c_str(), thread_id.str().c_str());
+                    "[callback_c] 收到: %s, 线程: %s",
+                    msg->data.c_str(), thread_id.str().c_str());
         std::this_thread::sleep_for(100ms);
     }
 
@@ -185,7 +185,7 @@ private:
     int shared_data_;
 };
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
@@ -196,14 +196,17 @@ int main(int argc, char** argv)
     // 多个线程可以同时执行不同回调组的回调
     // 但同一 MutuallyExclusiveCallbackGroup 内的回调仍然串行
     // ================================================================
-    rclcpp::executors::MultiThreadedExecutor executor(
-        rclcpp::ExecutorOptions(), 4);  // 4个线程
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 4); // 4个线程
 
     executor.add_node(node);
 
-    try {
+    try
+    {
         executor.spin();
-    } catch (...) {}
+    }
+    catch (...)
+    {
+    }
 
     rclcpp::shutdown();
     return 0;

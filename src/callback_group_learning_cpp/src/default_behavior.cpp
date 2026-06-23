@@ -48,14 +48,14 @@ public:
 
         // 慢回调：模拟耗时2秒的处理
         slow_timer_ = this->create_wall_timer(
-            2s,                     // 每2秒触发一次
+            2s, // 每2秒触发一次
             std::bind(&DefaultBehaviorNode::slow_callback, this)
             // 注意：没有指定 callback_group，默认使用节点的 default_callback_group
         );
 
         // 快回调：轻量处理
         fast_timer_ = this->create_wall_timer(
-            500ms,                  // 每0.5秒触发一次
+            500ms, // 每0.5秒触发一次
             std::bind(&DefaultBehaviorNode::fast_callback, this)
             // 同样使用默认回调组
         );
@@ -79,17 +79,19 @@ private:
         slow_count_++;
         auto start = std::chrono::steady_clock::now();
         auto start_sec = std::chrono::duration<double>(
-            start.time_since_epoch()).count();
+                             start.time_since_epoch())
+                             .count();
         RCLCPP_WARN(this->get_logger(),
-            "[慢回调 #%d] 开始执行 (t=%.2f)", slow_count_, start_sec);
+                    "[慢回调 #%d] 开始执行 (t=%.2f)", slow_count_, start_sec);
 
         // 模拟耗时处理（例如：图像处理、复杂计算、阻塞IO）
         std::this_thread::sleep_for(2s);
 
         auto elapsed = std::chrono::duration<double>(
-            std::chrono::steady_clock::now() - start).count();
+                           std::chrono::steady_clock::now() - start)
+                           .count();
         RCLCPP_WARN(this->get_logger(),
-            "[慢回调 #%d] 执行完成，耗时 %.2fs", slow_count_, elapsed);
+                    "[慢回调 #%d] 执行完成，耗时 %.2fs", slow_count_, elapsed);
     }
 
     /**
@@ -101,9 +103,10 @@ private:
     {
         fast_count_++;
         auto now_sec = std::chrono::duration<double>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
+                           std::chrono::steady_clock::now().time_since_epoch())
+                           .count();
         RCLCPP_INFO(this->get_logger(),
-            "[快回调 #%d] 执行 (t=%.2f)", fast_count_, now_sec);
+                    "[快回调 #%d] 执行 (t=%.2f)", fast_count_, now_sec);
     }
 
     // 定时器
@@ -115,7 +118,7 @@ private:
     int fast_count_;
 };
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
@@ -129,9 +132,9 @@ int main(int argc, char** argv)
     rclcpp::spin(node);
 
     RCLCPP_INFO(node->get_logger(),
-        "\n统计: 慢回调 %d 次, 快回调 %d 次\n"
-        "注意：快回调的触发次数远少于预期（0.5s间隔），因为被慢回调阻塞了",
-        0, 0);  // 注意：spin返回后无法获取成员变量，仅做演示
+                "\n统计: 慢回调 %d 次, 快回调 %d 次\n"
+                "注意：快回调的触发次数远少于预期（0.5s间隔），因为被慢回调阻塞了",
+                0, 0); // 注意：spin返回后无法获取成员变量，仅做演示
 
     rclcpp::shutdown();
     return 0;

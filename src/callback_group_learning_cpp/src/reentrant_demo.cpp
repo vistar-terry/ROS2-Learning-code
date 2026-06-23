@@ -91,7 +91,7 @@ private:
         // --- 不安全的计数操作（演示竞态条件）---
         // 读取 → 修改 → 写回，不是原子操作
         int temp = counter_;
-        std::this_thread::sleep_for(10ms);  // 增加竞态窗口
+        std::this_thread::sleep_for(10ms); // 增加竞态窗口
         temp += 1;
         counter_ = temp;
 
@@ -102,7 +102,7 @@ private:
         }
 
         RCLCPP_INFO(this->get_logger(),
-            "[timer1] 完成, 不安全计数=%d, 安全计数=%d", counter_, safe_counter_);
+                    "[timer1] 完成, 不安全计数=%d, 安全计数=%d", counter_, safe_counter_);
     }
 
     /**
@@ -129,7 +129,7 @@ private:
         }
 
         RCLCPP_INFO(this->get_logger(),
-            "[timer2] 完成, 不安全计数=%d, 安全计数=%d", counter_, safe_counter_);
+                    "[timer2] 完成, 不安全计数=%d, 安全计数=%d", counter_, safe_counter_);
     }
 
     /**
@@ -154,14 +154,14 @@ private:
     rclcpp::TimerBase::SharedPtr timer3_;
 
     // 线程安全
-    std::mutex mutex_;      // C++ 互斥锁
+    std::mutex mutex_; // C++ 互斥锁
 
     // 计数器
-    int counter_;           // 不安全的计数器（演示竞态）
-    int safe_counter_;      // 安全的计数器（使用 mutex 保护）
+    int counter_;      // 不安全的计数器（演示竞态）
+    int safe_counter_; // 安全的计数器（使用 mutex 保护）
 };
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
 
@@ -175,9 +175,13 @@ int main(int argc, char** argv)
 
     executor.add_node(node);
 
-    try {
+    try
+    {
         executor.spin();
-    } catch (...) {}
+    }
+    catch (...)
+    {
+    }
 
     rclcpp::shutdown();
     return 0;
