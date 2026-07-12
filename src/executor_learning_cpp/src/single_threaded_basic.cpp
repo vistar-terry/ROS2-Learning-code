@@ -5,7 +5,6 @@
  * 知识点：
  * - rclcpp::spin() 的内部工作机制
  * - SingleThreadedExecutor 的手动创建与使用
- * - spin / spin_once / spin_some 的区别
  * - 单线程执行器中回调的串行执行特性
  * - 执行器如何从等待队列中取出就绪的回调
  */
@@ -20,31 +19,36 @@ class SingleThreadedBasicNode : public rclcpp::Node
 {
 public:
     SingleThreadedBasicNode()
-        : Node("single_threaded_basic"), count_(0)
+        : Node("single_threaded_basic")
+        , count_(0)
     {
         // ================================================================
         // 1. 创建两个定时器 —— 模拟不同频率的回调
         //    在 SingleThreadedExecutor 中，回调严格串行执行
         // ================================================================
         fast_timer_ = this->create_wall_timer(
-            100ms, // 10Hz
+            200ms, // 5Hz
             [this]()
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[FastTimer 10Hz] count=%d, thread=%zu",
-                            ++count_, get_thread_id());
+                            "[FastTimer 5Hz][thread %zu] count: %d",
+                            get_thread_id(), ++count_);
             });
 
         slow_timer_ = this->create_wall_timer(
-            500ms, // 2Hz
+            1000ms, // 1Hz
             [this]()
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[SlowTimer 2Hz] ---- start simulated heavy task ----");
-                // 模拟 200ms 的处理延迟
-                std::this_thread::sleep_for(200ms);
+                    "[SlowTimer 1Hz][thread %zu] ---- start simulated heavy task ----", 
+                    get_thread_id());
+
+                // 模拟 800ms 的处理延迟
+                std::this_thread::sleep_for(800ms);
+
                 RCLCPP_INFO(this->get_logger(),
-                            "[SlowTimer 2Hz] ---- heavy task completed ----");
+                    "[SlowTimer 1Hz][thread %zu] ---- heavy task completed ----", 
+                    get_thread_id());
             });
 
         // ================================================================
@@ -57,13 +61,16 @@ public:
             [this](const std_msgs::msg::String::SharedPtr msg)
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Subscription] received: '%s', thread=%zu",
-                            msg->data.c_str(), get_thread_id());
+                    "[Subscription][thread %zu] received: '%s'",
+                    get_thread_id(), msg->data.c_str());
             });
 
-        RCLCPP_INFO(this->get_logger(), "=== SingleThreadedExecutor basic node started ===");
-        RCLCPP_INFO(this->get_logger(), "Observe: fast timer and subscription callbacks are blocked while slow timer runs");
-        RCLCPP_INFO(this->get_logger(), "All callbacks execute serially in the same thread");
+        RCLCPP_INFO(this->get_logger(), 
+            "=== SingleThreadedExecutor basic node started ===");
+        RCLCPP_INFO(this->get_logger(), 
+            "Observe: fast timer and subscription callbacks are blocked while slow timer runs");
+        RCLCPP_INFO(this->get_logger(), 
+            "All callbacks execute serially in the same thread");
     }
 
 private:
@@ -101,9 +108,6 @@ int main(int argc, char **argv)
     // ================================================================
     rclcpp::executors::SingleThreadedExecutor executor; // 手动创建单线程执行器
     executor.add_node(node);                            // 将节点注册到执行器
-
-    RCLCPP_INFO(node->get_logger(), "Using manually created SingleThreadedExecutor");
-    RCLCPP_INFO(node->get_logger(), "Calling executor.spin() to start callback execution...");
 
     // spin() 会阻塞当前线程，持续从等待集中取出就绪回调并执行
     executor.spin();

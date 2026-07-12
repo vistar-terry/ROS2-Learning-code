@@ -23,7 +23,9 @@ class MultiThreadedDemoNode : public rclcpp::Node
 {
 public:
     MultiThreadedDemoNode()
-        : Node("multi_threaded_demo"), counter_(0), imu_count_(0)
+        : Node("multi_threaded_demo")
+        , counter_(0)
+        , imu_count_(0)
     {
         // ================================================================
         // 1. 创建回调组
@@ -33,7 +35,7 @@ public:
         imu_group_ = this->create_callback_group(
             rclcpp::CallbackGroupType::MutuallyExclusive);
 
-        processing_group_ = this->create_callback_group(
+        mutually_group_ = this->create_callback_group(
             rclcpp::CallbackGroupType::MutuallyExclusive);
 
         // 可重入组 —— 允许同组回调并发（演示线程安全）
@@ -58,29 +60,45 @@ public:
                 if (imu_count_ % 50 == 0)
                 {
                     RCLCPP_INFO(this->get_logger(),
-                                "[IMU callback] frame #%d, thread=%zu, group=imu_group",
-                                imu_count_.load(), get_thread_id());
+                        "[IMU callback][thread %zu] frame: %d, group: imu_group",
+                        get_thread_id(), imu_count_.load());
                 }
             },
             sub_opts);
 
         // ================================================================
-        // 3. 处理定时器 —— 绑定到 processing_group_
+        // 3. 处理定时器 —— 绑定到 mutually_group_
         //    低频处理任务（2Hz），耗时操作不会阻塞 IMU
         // ================================================================
-        process_timer_ = this->create_wall_timer(
+        light_timer_ = this->create_wall_timer(
             500ms,
             [this]()
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Processing callback] start heavy computation, thread=%zu, group=processing_group",
-                            get_thread_id());
-                // 模拟 300ms 的计算
-                std::this_thread::sleep_for(300ms);
+                    "[Light callback][thread %zu] start ‌light computation, group: reentrant_group_",
+                    get_thread_id());
+                // 模拟 100ms 的计算
+                std::this_thread::sleep_for(100ms);
                 RCLCPP_INFO(this->get_logger(),
-                            "[Processing callback] computation completed");
+                    "[Light callback][thread %zu] ‌light computation completed",
+                    get_thread_id());
             },
-            processing_group_);
+            mutually_group_);
+
+        heavy_timer_ = this->create_wall_timer(
+            1500ms,
+            [this]()
+            {
+                RCLCPP_INFO(this->get_logger(),
+                    "[Heavy callback][thread %zu] start heavy computation, group: reentrant_group_",
+                    get_thread_id());
+                // 模拟 1000ms 的计算
+                std::this_thread::sleep_for(1000ms);
+                RCLCPP_INFO(this->get_logger(),
+                    "[Heavy callback][thread %zu] heavy computation completed",
+                    get_thread_id());
+            },
+            mutually_group_);
 
         // ================================================================
         // 4. 状态报告定时器 —— 绑定到 reentrant_group_
@@ -92,8 +110,8 @@ public:
             {
                 std::lock_guard<std::mutex> lock(data_mutex_);
                 RCLCPP_INFO(this->get_logger(),
-                            "[Status report] IMU frames=%d, count=%d, thread=%zu, group=reentrant",
-                            imu_count_.load(), counter_.load(), get_thread_id());
+                    "[Status report][thread %zu] IMU frames: %d, count: %d, group: reentrant",
+                    get_thread_id(), imu_count_.load(), counter_.load());
             },
             reentrant_group_);
 
@@ -105,18 +123,18 @@ public:
             [this]()
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Reentrant callback A] start, thread=%zu", get_thread_id());
+                    "[Reentrant callback A][thread %zu] start", get_thread_id());
                 std::this_thread::sleep_for(100ms);
                 counter_++;
                 RCLCPP_INFO(this->get_logger(),
-                            "[Reentrant callback A] end, count=%d", counter_.load());
+                    "[Reentrant callback A][thread %zu] end, count: %d", get_thread_id(), counter_.load());
             },
             reentrant_group_);
 
         RCLCPP_INFO(this->get_logger(), "=== MultiThreadedExecutor demo node started ===");
         RCLCPP_INFO(this->get_logger(), "Observe: callbacks in different groups execute concurrently in different threads");
-        RCLCPP_INFO(this->get_logger(), "      Callbacks in the same mutually exclusive group still execute serially");
-        RCLCPP_INFO(this->get_logger(), "      Callbacks in the same reentrant group can execute concurrently");
+        RCLCPP_INFO(this->get_logger(), "Callbacks in the same mutually exclusive group still execute serially");
+        RCLCPP_INFO(this->get_logger(), "Callbacks in the same reentrant group can execute concurrently");
     }
 
 private:
@@ -129,7 +147,7 @@ private:
 
     // 回调组
     rclcpp::CallbackGroup::SharedPtr imu_group_;
-    rclcpp::CallbackGroup::SharedPtr processing_group_;
+    rclcpp::CallbackGroup::SharedPtr mutually_group_;
     rclcpp::CallbackGroup::SharedPtr reentrant_group_;
 
     // 共享数据（跨回调组访问，需加锁）
@@ -140,7 +158,8 @@ private:
 
     // 订阅和定时器
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
-    rclcpp::TimerBase::SharedPtr process_timer_;
+    rclcpp::TimerBase::SharedPtr light_timer_;
+    rclcpp::TimerBase::SharedPtr heavy_timer_;
     rclcpp::TimerBase::SharedPtr report_timer_;
     rclcpp::TimerBase::SharedPtr reentrant_timer_;
 };
@@ -159,11 +178,11 @@ int main(int argc, char **argv)
     //    - 线程数 >= 回调组数量才能实现最大并发
     // ================================================================
     rclcpp::executors::MultiThreadedExecutor executor(
-        rclcpp::ExecutorOptions(), 2); // 使用 2 个线程
+        rclcpp::ExecutorOptions(), 4); // 使用 4 个线程
 
     executor.add_node(node); // 将节点注册到执行器
 
-    RCLCPP_INFO(node->get_logger(), "Using MultiThreadedExecutor with 2 threads");
+    RCLCPP_INFO(node->get_logger(), "Using MultiThreadedExecutor with 4 threads");
     executor.spin(); // 阻塞当前线程，多线程并发执行回调
 
     rclcpp::shutdown(); // 清理 ROS2 资源
