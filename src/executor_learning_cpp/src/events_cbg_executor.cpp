@@ -91,7 +91,7 @@ public:
             [this]()
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Report][thread %zu] sensor=%d, process=%d",
+                            "[Report][thread %zu] sensor: %d, process: %d",
                             get_thread_id(), sensor_count_.load(), proc_count_.load());
             },
             report_group_);
@@ -168,8 +168,7 @@ int main(int argc, char **argv)
     //     → worker 线程立即取走执行，延迟更低、空闲零 CPU 占用
     // ================================================================
     rclcpp::executors::EventsCBGExecutor executor(
-        rclcpp::ExecutorOptions(),
-        4); // 4 个 worker 线程，足以并发处理不同回调组
+        rclcpp::ExecutorOptions(), 4); // 4 个 worker 线程，足以并发处理不同回调组
 
     RCLCPP_INFO(node->get_logger(),
                 "Using EventsCBGExecutor with %zu worker threads",

@@ -37,14 +37,13 @@ public:
             10ms, // 100Hz 控制循环
             [this]()
             {
-                auto now = this->now();
                 auto jitter = measure_jitter();
 
                 loop_count_++;
                 if (loop_count_ % 100 == 0)
                 {
                     RCLCPP_INFO(this->get_logger(),
-                                "[ControlLoop 100Hz] #%d, jitter=%.3fms",
+                                "[ControlLoop 100Hz] #%d, jitter: %.3fms",
                                 loop_count_, jitter);
                 }
             });
@@ -55,7 +54,7 @@ public:
             [this]()
             {
                 RCLCPP_INFO(this->get_logger(),
-                            "[Monitor 10Hz] control loop count=%d", loop_count_);
+                            "[Monitor 10Hz] control loop count: %d", loop_count_);
             });
 
         // 模拟传感器订阅
@@ -66,7 +65,7 @@ public:
                 // 在 StaticSingleThreadedExecutor 中，
                 // 订阅回调和定时器回调严格串行，
                 // 不会出现数据竞争
-                RCLCPP_DEBUG(this->get_logger(),
+                RCLCPP_INFO(this->get_logger(),
                              "Received sensor data: %s", msg->data.c_str());
             });
 
@@ -97,25 +96,6 @@ int main(int argc, char **argv)
     rclcpp::init(argc, argv); // 初始化 ROS2
 
     auto node = std::make_shared<HighRateControlNode>();
-
-    // ================================================================
-    // 三种执行器的对比（此处使用 StaticSingleThreadedExecutor）
-    //
-    // SingleThreadedExecutor:
-    //   - 每次 spin_once 重新收集就绪回调 → 有内存分配
-    //   - 支持动态 add_node / remove_node
-    //   - 适用：一般应用、需要动态管理节点
-    //
-    // StaticSingleThreadedExecutor:
-    //   - 首次 spin 时一次性收集所有回调 → 之后零分配
-    //   - 不支持动态 add_node / remove_node（添加后不会生效）
-    //   - 适用：实时系统、高频控制、嵌入式平台
-    //
-    // MultiThreadedExecutor:
-    //   - 线程池并发执行 → 有互斥锁开销
-    //   - 适用：多回调组并发、I/O 密集型
-    // ================================================================
-
     rclcpp::executors::StaticSingleThreadedExecutor executor; // 零分配的静态执行器
     executor.add_node(node);                                  // 首次 add_node 后，回调集合固定
 
