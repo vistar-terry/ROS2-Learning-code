@@ -3,7 +3,7 @@
 <package format="3">
   <name>executor_learning_cpp</name>
   <version>0.1.0</version>
-  <description>ROS2 执行器（Executor）深度学习包 —— C++ 版，涵盖 SingleThreaded/MultiThreaded/StaticSingleThreaded 执行器、多执行器架构、优先级调度、机器人实战案例</description>
+  <description>ROS2 执行器学习包 —— C++ 版</description>
   <maintainer email="vistar@todo.todo">vistar</maintainer>
   <license>Apache-2.0</license>
 
@@ -15,6 +15,7 @@
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>example_interfaces</depend>
+  <depend>cm_executors</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_cmake_cppcheck</test_depend>

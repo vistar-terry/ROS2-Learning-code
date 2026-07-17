@@ -9,6 +9,13 @@
 1. [执行器概述](#1-执行器概述)
 2. [执行模型深度解析](#2-执行模型深度解析)
 3. [三种执行器类型](#3-三种执行器类型)
+   - [3.5 EventsCBGExecutor（事件驱动 + 回调组队列）](#35-eventscbgexecutor事件驱动--回调组队列)
+     - [3.5.1 轮询式执行器的痛点](#351-轮询式执行器的痛点)
+     - [3.5.2 核心架构与事件流](#352-核心架构与事件流)
+     - [3.5.4 回调组与事件队列：核心约束](#354-回调组与事件队列核心约束)
+     - [3.5.5 完整可运行示例](#355-完整可运行示例)
+     - [3.5.6 构造函数与关键方法](#356-构造函数与关键方法)
+     - [3.5.8 适用场景与选型](#358-适用场景与选型)
 4. [spin 系列方法详解](#4-spin-系列方法详解)
 5. [多节点管理](#5-多节点管理)
 6. [多执行器架构](#6-多执行器架构)
@@ -239,9 +246,227 @@ executor.spin();
 │       ├── 是 → StaticSingleThreadedExecutor
 │       └── 否 → SingleThreadedExecutor
 └── 是
-    └── MultiThreadedExecutor
+    ├── 追求最低事件延迟 / 高频率话题 → EventsCBGExecutor（事件驱动）
+    └── 通用并发场景 → MultiThreadedExecutor
         └── 线程数 ≥ 回调组数量
 ```
+
+### 3.5 EventsCBGExecutor（事件驱动 + 回调组队列）
+
+`EventsCBGExecutor` 是第三方包 **cm_executors**（cellumation）提供的**事件驱动**执行器，已随 ROS 2 Jazzy 正式发布（`apt install ros-jazzy-cm-executors`）。其设计围绕**回调组（Callback Group, CBG）**展开：每个回调组拥有独立的事件队列，DDS 数据到达或定时器触发时，底层直接把事件 push 到对应队列，由 worker 线程池取走执行，**不再周期性轮询等待集**。
+
+```cpp
+#include <cm_executors/events_cbg_executor.hpp>  // 来自 cm_executors 包，非 rclcpp 内置
+
+// 构造函数：options, worker 线程数(0=CPU核数,最少2), 等待超时(-1=无限)
+rclcpp::executors::EventsCBGExecutor executor(
+    rclcpp::ExecutorOptions(),
+    4); // 4 个 worker 线程
+executor.add_node(node);
+executor.spin();
+```
+
+#### 3.5.1 轮询式执行器的痛点（为什么需要它）
+
+SingleThreaded / MultiThreaded 执行器本质是一个循环：
+
+```
+while (ok()) {
+    wait_set = 收集所有实体的等待条件;   // 每次重建等待集
+    rcl_wait(wait_set, timeout);        // 阻塞等待，有固定轮询周期
+    取出就绪实体并执行回调;
+}
+```
+
+问题：
+- **固定轮询延迟**：就绪检测受 `rcl_wait()` 超时周期限制，无法做到"事件到达立即执行"。
+- **空闲也占 CPU**：即使没有任何消息，执行器线程仍周期性唤醒重建等待集。
+- **等待集重建开销**：每次循环都要把全部实体的等待条件重新登记进等待集（`rcl_wait_set`）。
+- **回调组隔离弱**：并发粒度由线程池大小决定，难以把"高频传感器"与"低频重计算"在队列层面彻底隔离。
+
+`EventsCBGExecutor` 用**事件队列 + 回调组**取代等待集轮询，从根本上消除上述三点。
+
+#### 3.5.2 核心架构与事件流
+
+```
+                         ┌────────────────────────────────────────┐
+                         │         EventsCBGExecutor               │
+                         │  rcl_polling_thread：底层 DDS 轮询       │
+                         │  TimerManager：定时器事件产生           │
+                         └───────────────┬────────────────────────┘
+                                         │ 事件到达 / 定时器触发
+                 ┌───────────────────────┼───────────────────────┐
+                 ▼                       ▼                       ▼
+        ┌────────────────┐     ┌────────────────┐     ┌────────────────┐
+        │ sensor_group_  │     │ process_group_ │     │ report_group_  │
+        │ 事件队列(互斥) │     │ 事件队列(互斥) │     │ 事件队列(重入) │
+        │ RegisteredEntity│    │ RegisteredEntity│    │ RegisteredEntity│
+        └───────┬────────┘     └───────┬────────┘     └───────┬────────┘
+                │                     │                     │
+                └─────────────────────┼─────────────────────┘
+                                      ▼
+                         ┌────────────────────────────────┐
+                         │  Worker 线程池（N 个 worker）    │
+                         │  并发取走就绪事件并执行回调        │
+                         └────────────────────────────────┘
+```
+
+- **rcl_polling_thread**：一个独立底层线程，负责 DDS 层等待并把"有数据"的事件 push 进对应 CBG 队列。
+- **TimerManager**：管理所有定时器，定时器到期时把 Timer 事件 push 进对应 CBG 队列。
+- **RegisteredEntityCache（每 CBG 一个）**：即"事件队列"，缓存已就绪、等待执行的实体（`ReadyEntity`）。
+- **Worker 线程池**：`number_of_threads` 个 worker 并发地从各 CBG 队列取走 `ReadyEntity` 并执行其回调。
+
+#### 3.5.3 事件生命周期
+
+1. **注册**：节点 `add_node` 后，各实体的回调组（`CallbackGroup`）被登记到执行器，每个 CBG 建立自己的 `RegisteredEntityCache`。
+2. **产生**：DDS 收到消息，或 `TimerManager` 判定某定时器到期。
+3. **入队**：`rcl_polling_thread` / `TimerManager` 把就绪实体包装成 `ReadyEntity`，`push` 进**该实体所属 CBG 的事件队列**。
+4. **取走**：某个空闲 worker 线程从队列取出 `ReadyEntity`，通过其 `get_execute_function()` 得到 `std::function<void()>`。
+5. **执行**：worker 调用该函数执行对应回调（订阅 / 定时器 / 服务 / 客户端 / waitable）。
+
+整个过程**没有 `rcl_wait` 轮询循环**，事件从产生到执行是"推送 → 取走"的流水线。
+
+#### 3.5.4 回调组与事件队列：核心约束
+
+> ⚠️ **这是使用 EventsCBGExecutor 最重要的规则**
+
+事件驱动依赖回调组来路由事件。每个实体**必须显式归属某个回调组**，否则它不会进入任何 CBG 队列，也就不会被调度执行。
+
+- **MutuallyExclusive（互斥）CBG**：同一队列内的实体**串行**执行（一个执行完才轮到下一个）。适合彼此可能共享状态、需要互斥的回调。
+- **Reentrant（可重入）CBG**：同一队列内的实体**可被多个 worker 并发**执行。适合无共享状态、可安全并行的回调。
+- 不同 CBG 的队列之间天然隔离：放进 `process_group_` 的耗时任务不会阻塞 `sensor_group_` 的队列。
+
+```cpp
+// 正确：显式绑定回调组
+auto sensor_cbg = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+timer_ = create_wall_timer(20ms, cb, sensor_cbg);   // 第 3 个参数就是回调组
+
+// 订阅通过 SubscriptionOptions 指定
+rclcpp::SubscriptionOptions opt;
+opt.callback_group = report_cbg;
+sub_ = create_subscription<...>("topic", 10, cb, opt);
+
+// 错误：使用默认回调组（不显式指定）
+timer_ = create_wall_timer(20ms, cb);   // 进入默认组，事件驱动隔离失效
+```
+
+#### 3.5.5 完整可运行示例
+
+以下示例把三类实体分别放进三个回调组，由 4 个 worker 并发驱动：
+
+```cpp
+#include <rclcpp/rclcpp.hpp>
+#include <cm_executors/events_cbg_executor.hpp>
+#include <std_msgs/msg/string.hpp>
+
+class EventsCBGNode : public rclcpp::Node
+{
+public:
+  EventsCBGNode() : Node("events_cbg_node")
+  {
+    // 1. 创建三个回调组
+    auto sensor_cbg  = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto process_cbg = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto report_cbg  = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+
+    // 2. 高频传感器定时器(50Hz) -> sensor_cbg
+    sensor_timer_ = create_wall_timer(
+      20ms, [this]() { /* 采样，不阻塞 */ }, sensor_cbg);
+
+    // 3. 重计算定时器(3s, 耗时1.2s) -> process_cbg（长任务不阻塞 sensor_cbg）
+    process_timer_ = create_wall_timer(
+      3000ms, [this]() { std::this_thread::sleep_for(1200ms); }, process_cbg);
+
+    // 4. 订阅 -> report_cbg（可重入，与外部消息并发）
+    rclcpp::SubscriptionOptions opt;
+    opt.callback_group = report_cbg;
+    sub_ = create_subscription<std_msgs::msg::String>(
+      "/events_demo_topic", 10,
+      [](const std_msgs::msg::String::SharedPtr msg) { /* ... */ }, opt);
+  }
+
+private:
+  rclcpp::TimerBase::SharedPtr sensor_timer_, process_timer_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_;
+};
+
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<EventsCBGNode>();
+  rclcpp::executors::EventsCBGExecutor executor(rclcpp::ExecutorOptions(), 4);
+  executor.add_node(node);
+  executor.spin();
+  rclcpp::shutdown();
+  return 0;
+}
+```
+
+运行：`ros2 run executor_learning_cpp events_cbg_executor`（包内已提供完整示例）。
+
+#### 3.5.6 构造函数与关键方法
+
+```cpp
+// options：通用执行器选项；number_of_threads：worker 数(0=CPU核数,最少2)
+// timeout：worker 等待事件的超时(-1=无限等待)
+rclcpp::executors::EventsCBGExecutor(
+    const rclcpp::ExecutorOptions & options = rclcpp::ExecutorOptions(),
+    size_t number_of_threads = 0,
+    std::chrono::nanoseconds timeout = std::chrono::nanoseconds(-1));
+```
+
+| 方法 | 说明 |
+|------|------|
+| `add_node(node, notify=true)` | 注册节点，其回调组随之注册到执行器 |
+| `add_callback_group(cbg, node, notify)` | 单独添加一个回调组 |
+| `add_callback_group_only(cbg)` | 添加回调组但不绑定节点 |
+| `remove_callback_group(cbg, notify)` | 移除回调组 |
+| `spin()` | 阻塞式驱动（已 spinning 时抛异常） |
+| `spin(exception_handler)` | 带异常处理器的 spin，可从多线程调用 |
+| `spin_once(timeout=-1ns)` | 执行一个就绪事件后返回 |
+| `spin_some(max_duration=0ns)` | 限时执行多个就绪事件 |
+| `spin_all(max_duration)` | 限时执行全部就绪事件 |
+| `collect_and_execute_ready_events(max_duration, recollect)` | 收集并执行就绪事件，返回是否有工作 |
+| `cancel()` | 异步取消任何正在运行的 spin* |
+| `get_number_of_threads()` | 返回 worker 线程数 |
+| `is_spinning()` | 是否正在 spin |
+| `spin_until_future_complete(future, timeout=-1)` | 等待 future 完成（服务/客户端常用） |
+
+#### 3.5.7 与 rclcpp 内置 EventsExecutor 的区别
+
+ROS 2 Jazzy 的 `rclcpp` 也带一个实验性事件执行器 `rclcpp::experimental::executors::EventsExecutor`，二者都是事件驱动，但定位不同：
+
+| 维度 | rclcpp 内置 EventsExecutor | cm_executors EventsCBGExecutor |
+|------|---------------------------|-------------------------------|
+| 命名空间 | `rclcpp::experimental::executors` | `rclcpp::executors` |
+| 成熟度 | experimental（实验性） | 已正式发布（Jazzy 分支维护） |
+| 队列模型 | 执行器级事件收集 | **每个回调组独立事件队列** |
+| 隔离粒度 | 回调组为可选优化 | 回调组是强制要求，隔离更强 |
+| 依赖 | 仅 rclcpp | 需额外安装 cm_executors 包 |
+
+若你的场景强依赖"按回调组做硬隔离 + 低延迟"，EventsCBGExecutor 是更直接的选择；如果只是想体验事件驱动、不想引入额外包，可用内置 `EventsExecutor`。
+
+#### 3.5.8 适用场景与选型建议
+
+**适合用 EventsCBGExecutor**：
+- 高频话题 / 高频定时器（如 50Hz~1kHz 传感器），要求低延迟、不被长任务拖慢。
+- 事件密集型系统（大量订阅、服务、客户端并发）。
+- 需要在队列层面把"快/慢"实体彻底隔离的实时系统。
+- 对空闲 CPU 占用敏感（事件少时 worker 阻塞，零忙等）。
+
+**不适合 / 没必要**：
+- 简单 demo、低频回调的通用节点 —— 用 `SingleThreadedExecutor` + `rclcpp::spin()` 更省事。
+- 已用 `MultiThreadedExecutor` 且无明显延迟瓶颈的场景。
+- 无法安装 cm_executors 包且无网环境（见下文注意事项）。
+
+#### 3.5.9 注意事项与常见陷阱
+
+1. **必须显式绑定回调组**：忘记给实体指定 CBG，实体进不了事件队列，永远不会被调用（最常见陷阱）。
+2. **MutuallyExclusive 内的长任务会阻塞同组其他回调**：重计算应放入独立 CBG（如示例的 `process_cbg`），避免拖累高频组。
+3. **Reentrant 组需保证线程安全**：并发执行时共享变量要用 `std::mutex` / `std::atomic` 保护。
+4. **依赖 cm_executors 包**：头文件是 `<cm_executors/events_cbg_executor.hpp>`，不是 rclcpp 内置路径；CMake 需 `find_package(cm_executors REQUIRED)` 并 `ament_target_dependencies(... cm_executors)`；离线环境用源码编译放入 workspace 即可。
+5. **弃用 API 警告**：在 Jazzy 上编译 cm_executors 源码会出现 `Waitable::execute()` 弃用警告（属第三方包代码，不影响功能）；将相关 `auto data` 改为 `const auto data` 可消除（见已修复的 `ready_entity.hpp`）。
+6. **worker 数建议 ≥ 回调组数**：保证每个 CBG 队列都有 worker 能及时取走事件，避免某个 CBG 饿死。
 
 ---
 
@@ -794,17 +1019,18 @@ RCLCPP_INFO(logger, "线程=%zu", get_thread_id());
 ### 12.1 执行器速查
 
 ```
-┌────────────────────────┬────────────┬─────────────┬────────────────────┐
-│                        │ Single     │ Multi       │ StaticSingle       │
-├────────────────────────┼────────────┼─────────────┼────────────────────┤
-│ 线程数                  │ 1          │ N (可配置)   │ 1                  │
-│ 并发执行                │ 否         │ 是           │ 否                 │
-│ 动态add/remove_node    │ 是         │ 是           │ 否                 │
-│ 内存分配                │ 每次       │ 每次         │ 零分配（首次后）    │
-│ 延迟抖动                │ 中         │ 高           │ 最低               │
-│ 实时性                  │ 中         │ 低           │ 最高               │
-│ 适用场景                │ 一般应用    │ 并发处理     │ 实时控制/嵌入式     │
-└────────────────────────┴────────────┴─────────────┴────────────────────┘
+┌────────────────────────┬────────────┬─────────────┬────────────────────┬────────────────────┐
+│                        │ Single     │ Multi       │ StaticSingle       │ EventsCBG         │
+├────────────────────────┼────────────┼─────────────┼────────────────────┼────────────────────┤
+│ 线程数                  │ 1          │ N (可配置)   │ 1                  │ N (worker 池)      │
+│ 并发执行                │ 否         │ 是           │ 否                 │ 是（跨 CBG）       │
+│ 动态add/remove_node    │ 是         │ 是           │ 否                 │ 是                 │
+│ 内存分配                │ 每次       │ 每次         │ 零分配（首次后）    │ 事件入队（低）      │
+│ 驱动方式                │ 轮询        │ 轮询         │ 轮询               │ 事件驱动（无轮询）  │
+│ 延迟抖动                │ 中         │ 高           │ 最低               │ 低（事件即触发）    │
+│ 实时性                  │ 中         │ 低           │ 最高               │ 高                 │
+│ 适用场景                │ 一般应用    │ 并发处理     │ 实时控制/嵌入式     │ 高频/低延迟/事件密集 │
+└────────────────────────┴────────────┴─────────────┴────────────────────┴────────────────────┘
 ```
 
 ### 12.2 spin 方法速查
@@ -877,3 +1103,4 @@ SLAM(里程计+地图+回环)        → MultiThreadedExecutor + 4组
 | ⑧ | `executor_callback_groups.cpp` | 执行器+回调组配合 | `ros2 run executor_learning_cpp executor_callback_groups` |
 | ⑨ | `robot_nav_executor.cpp` | 导航栈实战 | `ros2 run executor_learning_cpp robot_nav_executor` |
 | ⑩ | `robot_multi_arm.cpp` | 多臂协调实战 | `ros2 run executor_learning_cpp robot_multi_arm` |
+| ⑪ | `events_cbg_executor.cpp` | EventsCBGExecutor、事件驱动、回调组队列 | `ros2 run executor_learning_cpp events_cbg_executor` |
