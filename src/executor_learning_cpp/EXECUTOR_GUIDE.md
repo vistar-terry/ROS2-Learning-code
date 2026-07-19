@@ -1095,7 +1095,7 @@ SLAM(里程计+地图+回环)        → MultiThreadedExecutor + 4组
 |---|------|--------|---------|
 | ① | `single_threaded_basic.cpp` | spin()原理、手动创建执行器 | `ros2 run executor_learning_cpp single_threaded_basic` |
 | ② | `multi_threaded_demo.cpp` | MultiThreadedExecutor、线程安全 | `ros2 run executor_learning_cpp multi_threaded_demo` |
-| ③ | `static_executor.cpp` | StaticSingleThreadedExecutor、零分配 | `ros2 run executor_learning_cpp static_executor` |
+| ③ | `static_executor.cpp` | StaticSingleThreadedExecutor：零分配、确定性低抖动、串行无锁、spin 后 add_node 失效 | `ros2 run executor_learning_cpp static_executor` |
 | ④ | `executor_benchmark.cpp` | 三种执行器性能对比 | `ros2 run executor_learning_cpp executor_benchmark [1|2|3]` |
 | ⑤ | `spin_methods.cpp` | spin/spin_once/spin_some | `ros2 run executor_learning_cpp spin_methods [1|2|3|4]` |
 | ⑥ | `multi_node_single_executor.cpp` | 多节点单执行器 | `ros2 run executor_learning_cpp multi_node_single_executor [1|2|3]` |
